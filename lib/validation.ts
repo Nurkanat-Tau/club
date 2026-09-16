@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { normalizeKzPhone } from "./phone";
 import { fromLocalInput } from "./time";
+import { getCategory } from "./categories";
 
 const str = (max: number) => z.string().trim().max(max);
 const optionalUrl = z
@@ -45,6 +46,20 @@ export const clubSchema = z.object({
   chat_link: optionalUrl,
   meeting_point: str(200).min(2, "Укажите место встречи"),
   schedule_text: str(200).min(2, "Укажите расписание"),
+});
+
+export const newClubSchema = z.object({
+  name: str(60).min(3, "Название — минимум 3 символа"),
+  category: z.string().refine((v) => !!getCategory(v), "Выберите категорию"),
+  description: str(2000).min(20, "Опишите клуб подробнее (минимум 20 символов)"),
+  schedule_text: str(200).min(2, "Укажите, когда проходят встречи"),
+  meeting_point: str(200).min(2, "Укажите место встречи"),
+  chat_link: optionalUrl,
+  instagram: str(60).transform((v) => (v === "" ? null : v.replace(/^@/, ""))),
+  organizer_name: str(80).min(2, "Укажите ваше имя"),
+  organizer_bio: str(500).default(""),
+  email: z.string().trim().toLowerCase().max(200).email("Введите корректный email"),
+  password: z.string().min(8, "Пароль — минимум 8 символов").max(200),
 });
 
 export const feedbackSchema = z.object({

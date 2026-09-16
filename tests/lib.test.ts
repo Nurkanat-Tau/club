@@ -3,7 +3,10 @@ import { normalizeKzPhone, formatPhone } from "../lib/phone";
 import { fromLocalInput, toLocalInput, formatTime, relativeDay } from "../lib/time";
 import { memberSchema, eventSchema } from "../lib/validation";
 import { computeMetrics } from "../lib/metrics";
-import { buildSeed } from "../lib/data/seed";
+import { buildSeed } from "./fixture";
+import { slugify } from "../lib/slug";
+import { hashPassword, checkPassword } from "../lib/password";
+import { EmailTakenError } from "../lib/types";
 import { createMemoryRepo, resetMemoryStore } from "../lib/data/memory";
 
 describe("phone", () => {
@@ -66,8 +69,46 @@ describe("validation", () => {
   });
 });
 
-describe("memory repo", () => {
+describe("slug + password", () => {
+  it("transliterates Russian and Kazakh", () => {
+    expect(slugify("Шахматы в кофейне")).toBe("shahmaty-v-kofeyne");
+    expect(slugify("Қазақ тілі клубы")).toBe("qazaq-tili-kluby");
+    expect(slugify("!!!")).toBe("club");
+  });
+  it("hashes and verifies", async () => {
+    const h = await hashPassword("correct horse");
+    expect(h.startsWith("scrypt$")).toBe(true);
+    expect(await checkPassword("correct horse", h)).toBe(true);
+    expect(await checkPassword("wrong", h)).toBe(false);
+    expect(await checkPassword("x", null)).toBe(false);
+  });
+});
+
+const newClub = {
+  name: "Шахматы в кофейне", category: "Шахматы", emoji: "♟️", color: "#000", description: "x".repeat(20),
+  schedule_text: "вс 16:00", meeting_point: "кафе", chat_link: null, instagram: null, organizer_name: "Ерлан", organizer_bio: "",
+};
+
+describe("memory repo (empty start)", () => {
   beforeEach(() => resetMemoryStore());
+  it("starts empty and creates clubs with unique slugs", async () => {
+    const repo = createMemoryRepo();
+    expect(await repo.listClubs("shymkent")).toEqual([]);
+    const a = await repo.createClubWithOrganizer("shymkent", newClub, "a@x.kz", "h1");
+    const b = await repo.createClubWithOrganizer("shymkent", newClub, "b@x.kz", "h2");
+    expect(a.slug).toBe("shahmaty-v-kofeyne");
+    expect(b.slug).toBe("shahmaty-v-kofeyne-2");
+    expect(a.is_founding).toBe(true);
+    expect((await repo.getOrganizer("A@x.kz"))?.club_id).toBe(a.id);
+    expect(await repo.getPasswordHash("b@x.kz")).toBe("h2");
+    await expect(repo.createClubWithOrganizer("shymkent", newClub, "a@x.kz", "h")).rejects.toBeInstanceOf(EmailTakenError);
+    await repo.setClubHidden(a.id, true);
+    expect((await repo.listClubs("shymkent")).map((c) => c.id)).toEqual([b.id]);
+  });
+});
+
+describe("memory repo", () => {
+  beforeEach(() => resetMemoryStore(buildSeed()));
   it("dedupes members by phone and joins once", async () => {
     const repo = createMemoryRepo();
     const a = await repo.upsertMemberByPhone("Test", "+77019998877");

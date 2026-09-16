@@ -69,7 +69,7 @@ export async function getVisitorId(): Promise<string | null> {
 export type OrgSession = Organizer & { isAdmin: boolean };
 
 export function isAdminEmail(email: string) {
-  const list = (process.env.ADMIN_EMAILS ?? (DEMO_MODE ? "admin@club.kz" : ""))
+  const list = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

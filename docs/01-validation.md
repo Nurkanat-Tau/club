@@ -112,7 +112,7 @@ Goal for the week: **5 committed organizers, 5 first events scheduled, and the f
 
 | Day | Actions | Output |
 |---|---|---|
-| **Day 1** | Sit down with your brother for 60 minutes. Ask how he organizes today: what's annoying, how many people come, how he reminds them. Set up Supabase and Vercel (see README). Add his club. | Brother's club live; his real pain written down |
+| **Day 1** | Sit down with your brother for 60 minutes. Ask how he organizes today: what's annoying, how many people come, how he reminds them. He creates his club on `/new-club`. | Brother's club live; his real pain written down |
 | **Day 2** | Build a list of 20 candidate organizers (see `02-founders.md`): search Instagram, 2GIS, university clubs and Telegram groups. Score each one against §7. Send 10 DMs using the script in §8. | 20 candidates, 10 messages sent |
 | **Day 3** | Hold 3–5 calls or meetings. Use problem questions, not a pitch: "How do you gather people now? Last event, how many came? How do you remind them?" Pitch only in the last 5 minutes. | 3–5 conversations logged |
 | **Day 4** | Send 10 more DMs. Follow up with yesterday's calls. Get **verbal yes from 2 organizers** + schedule their first event. Run your own English club's first event date. | 3 clubs committed |
@@ -192,7 +192,7 @@ Definitions (calculated on `/admin`):
 ## 10. The first actions to take TODAY
 
 1. **Call your brother (30 minutes).** Ask how he organizes now, what's annoying, and how many people came to his last meetup. Get his commitment for a first run date within 7 days.
-2. **Create free Supabase and Vercel accounts** and follow the README so the app is live (about 45 minutes).
+2. **Make sure the site has its database connected** (see the README) and create your own club on `/new-club`.
 3. **Write down 20 organizer candidates** in a note, using `docs/02-founders.md` as the search guide.
 4. **Send the first 5 DMs** using the script above.
 5. **Pick the date of your own English Speaking Club** (a venue that isn't your employer's center).

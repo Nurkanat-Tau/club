@@ -30,7 +30,8 @@ export default function Home() {
         )}
       </div>
       <div className="mt-auto pt-12 text-center text-sm text-muted">
-        Организуете сообщество? <Link href="/org/login" className="underline">Вход для организаторов</Link>
+        Организуете сообщество? <Link href="/new-club" className="underline">Создать клуб</Link> ·{" "}
+        <Link href="/org/login" className="underline">Войти</Link>
       </div>
     </main>
   );

@@ -15,120 +15,58 @@ Pilot: **Shymkent, 5 founding clubs, 4 weeks.**
 
 ## What the app does
 
-**For members** (no password, just name and WhatsApp number):
+The site starts **empty**. Everything on it comes from users and is saved in the database.
 
-- Pick a city, then see this week's events and the founding clubs.
-- Join a club, then go to the club's WhatsApp or Telegram chat.
-- Tap "Я приду" on an event, add it to the calendar, or cancel.
-- See "My events" and rate past events.
+**Organizers** open `/new-club` and create a club: name, category, description, schedule, place, chat link, plus their email and a password. After that they can:
 
-**For organizers** (email and password):
+- create, edit and cancel events
+- see who's coming and send each person a WhatsApp reminder in one tap
+- mark who actually came
+- see their members and edit the club page
 
-- Create, edit and cancel events.
-- See who's coming, and send each person a WhatsApp reminder with one tap.
-- Copy a ready-made invite text.
-- Mark who actually came.
-- See the members list and edit the club page.
+**Members** browse the city page, join a club and tap "Я приду" on events. They only enter a name and WhatsApp number, with no password; their browser remembers them. They can see "My events" and rate past events.
 
-**For you (admin):** `/admin` shows the experiment dashboard: show rate, return rate, active clubs, members in 2+ clubs, ratings, and an automatic continue / change / stop signal.
+**Admins** (emails listed in `ADMIN_EMAILS`) sign up by creating a club like anyone else. Then `/admin` shows the experiment dashboard and lets them hide spam clubs.
 
 ---
 
-## 1. Run it on your computer (5 minutes, no database needed)
+## 1. Run it on your computer
 
-You need **Node.js 20.9 or newer**. Download the LTS version from https://nodejs.org.
+You need **Node.js 20.9 or newer**.
 
 ```bash
-git clone https://github.com/<your-username>/club.git
+git clone https://github.com/Nurkanat-Tau/club.git
 cd club
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app runs in **demo mode**: fake data that resets on every restart.
-
-Demo logins at http://localhost:3000/org/login (password `demo` for all):
-
-| Email | Role |
-|---|---|
-| `run@club.kz`, `english@club.kz`, `chess@club.kz`, `tennis@club.kz`, `hike@club.kz` | Organizer of that club |
-| `admin@club.kz` | Admin (`/admin`) |
-
-To see it as a phone: in Chrome press F12, then click the phone icon.
+Open http://localhost:3000. Without a database the data lives in memory and resets when you stop the server. To keep it, put a Postgres connection string in `.env.local` as `DATABASE_URL=...`.
 
 ---
 
-## 2. Put it online for real (about 45 minutes, free)
+## 2. Put it online (Vercel + Postgres)
 
-### Step 1: Create the database (Supabase)
+1. Import the GitHub repo into Vercel.
+2. Add a database: open the Vercel project, go to **Storage → Create Database**, pick **Neon (Postgres)** on the free plan, and connect it to the project. Vercel adds `DATABASE_URL` automatically.
+3. In **Settings → Environment Variables**, set:
+   - `SESSION_SECRET`: 32+ random characters
+   - `ADMIN_EMAILS`: your email
+   - Remove `ALLOW_DEMO` if it's set.
+4. **Redeploy** (Deployments → ⋯ → Redeploy).
 
-1. Go to https://supabase.com, sign up, and click **New project**.
-   - Name: `club`. Region: the closest one offered (for example Frankfurt). Save the database password somewhere safe.
-2. When the project is ready, open **SQL Editor** → **New query**.
-3. Open [`supabase/schema.sql`](supabase/schema.sql) in this repo, copy all of it, paste it in, and click **Run**. You should see "Success".
-4. Do the same with [`supabase/seed.sql`](supabase/seed.sql). This creates the 5 founding clubs with placeholder text.
-5. Go to **Project Settings → API** (in newer dashboards it's called **API Keys**) and copy:
-   - the **Project URL** (it looks like `https://abcd.supabase.co`)
-   - the **service_role** or **secret** key. ⚠️ This key is a master password: never share it or paste it into public places.
+The app creates its own tables on the first request. There's no SQL to run by hand. Then open `/new-club` and create your club with your admin email, and `/admin` will work.
 
-### Step 2: Create organizer accounts
-
-For each organizer, and for yourself:
-
-1. In Supabase, go to **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick **Auto Confirm User**.
-2. In the **SQL Editor**, run the matching line:
-
-```sql
--- organizer of the running club
-insert into organizers (email, club_id) select 'brother@example.com', id from clubs where slug = 'run';
--- you as admin (club_id = null)
-insert into organizers (email, club_id) values ('you@example.com', null);
--- you as organizer of the English club: use a second email, e.g. you+english@gmail.com
-insert into organizers (email, club_id) select 'you+english@gmail.com', id from clubs where slug = 'english';
-```
-
-Club slugs: `run`, `english`, `chess`, `table-tennis`, `hiking`. To rename a club or replace hiking with something else, edit it in **Table Editor → clubs** (name, slug, emoji, category, color).
-
-### Step 3: Deploy (Vercel)
-
-1. Go to https://vercel.com and sign up **with your GitHub account**.
-2. Click **Add New… → Project**, pick the `club` repository, and click **Import**.
-3. Open **Environment Variables** and add:
-
-| Name | Value |
-|---|---|
-| `SUPABASE_URL` | your Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | your service_role / secret key |
-| `SESSION_SECRET` | any random text of 32+ characters. You can generate one at https://generate-secret.vercel.app/32 |
-| `ADMIN_EMAILS` | your admin email |
-| `NEXT_PUBLIC_CONTACT_WHATSAPP` | *(optional)* your number, e.g. `+77011234567` |
-
-4. Click **Deploy**. After about a minute you get a link like `https://club-xxxx.vercel.app`.
-5. Open `/org/login`, log in with your admin email, and check that `/admin` loads.
-
-From now on, **every push to GitHub redeploys automatically.**
-
-### Step 4: Before sharing the link
-
-- [ ] Log in as each organizer and fill in the club page: description, schedule, place, and chat link.
-- [ ] Each organizer creates their first event.
-- [ ] Join a club and RSVP from your own phone to check the whole flow.
-- [ ] On the phone, use **Share → Add to Home Screen**. It installs like an app.
-- [ ] Optional: connect your own domain in Vercel → Settings → Domains.
-
----
+Every push to `main` redeploys automatically.
 
 ## 3. Everyday tasks
 
 | Task | Where |
 |---|---|
-| Add or remove an organizer | Supabase → Authentication (user) + `organizers` table |
-| Fix a typo in someone's name or phone | Supabase → Table Editor → `members` |
-| Delete a person's data on request | Table Editor → `members` → delete the row (their memberships, RSVPs and ratings are deleted too) |
-| Export data | Table Editor → any table → **Export to CSV** |
-| See raw analytics | Table Editor → `logs` |
-
----
+| Hide a spam or inactive club | `/admin` → "Скрыть" |
+| Look at or export raw data | Vercel → Storage → your database → SQL editor / Neon console |
+| Delete a person's data on request | `delete from members where phone = '+77…';` (their memberships, RSVPs and ratings go too) |
+| Reset an organizer's password | Ask them to create a new account, or update `organizers.password_hash` (scrypt format, see `lib/password.ts`) |
 
 ## 4. For developers
 
@@ -138,10 +76,11 @@ npm run check      # typecheck + lint + unit tests
 npm run build      # production build
 ```
 
-- Copy `.env.example` to `.env.local` to run locally against Supabase.
+- Copy `.env.example` to `.env.local` and set `DATABASE_URL` to run locally against Postgres.
 - In production, the app **refuses to run without a database** unless `ALLOW_DEMO=1` is set. This keeps a demo deployment from collecting real people's phone numbers.
-- Stack: Next.js 16 (App Router, Server Actions), TypeScript, Tailwind 4, Supabase (Postgres + Auth), Zod, Vitest.
-- Data access goes through the `Repo` interface in `lib/data/`: `memory.ts` (demo) and `supabase.ts` (production).
+- Stack: Next.js 16 (App Router, Server Actions), TypeScript, Tailwind 4, Postgres (`pg`), Zod, Vitest. Organizer passwords are hashed with scrypt.
+- Data access goes through the `Repo` interface in `lib/data/`: `memory.ts` (no database) and `postgres.ts` (production). The schema is in `lib/data/schema.ts` (copy in `db/schema.sql`) and is applied automatically.
+- Postgres integration test: `TEST_DATABASE_URL=postgres://… npm test` (it wipes that database).
 - All writes are server actions in `app/actions.ts`. Each one re-checks permissions.
 
 ```
@@ -150,22 +89,32 @@ app/
   c/[slug]/        club page
   e/[id]/          event page (+ /ics calendar file)
   me/              my events + ratings
+  new-club/        organizer sign-up: create a club
   org/             organizer dashboard (login, events, members, club)
   admin/           experiment metrics
   go/chat/[slug]/  tracked redirect to the club chat
   actions.ts       all server actions
 components/        UI
 lib/
-  data/            memory + Supabase repositories, demo seed
+  data/            memory + Postgres repositories, schema
   metrics.ts       experiment metrics + decision rules
   session.ts       signed cookies (member, organizer)
   validation.ts    zod schemas
-supabase/          schema.sql, seed.sql
+db/                schema.sql (reference)
 docs/              strategy
 tests/             unit tests
 ```
 
 ### What was tested
 
-- Unit tests: phone normalization, Kazakhstan time zone, validation, the memory repository, metrics.
-- End-to-end browser runs (Playwright) in **demo mode** and **against a real Postgres + PostgREST database**. They covered: join (including an invalid phone), RSVP, cancel, calendar file, "My events", organizer login (wrong and right password), creating an event, editing a club, marking attendance, capacity limits, organizers blocked from other clubs' events and from `/admin`, the admin dashboard, and the tracked chat redirect.
+- Unit tests: phone normalization, Kazakhstan time zone, validation, slugs (Russian and Kazakh), password hashing, the memory repository, metrics.
+- A Postgres integration test of the full data flow on an empty database.
+- An end-to-end browser run against real Postgres, starting empty:
+  - creating a club (including a validation error that keeps what was typed, and a duplicate email being rejected)
+  - the organizer's first event
+  - a member joining and signing up for an event
+  - the organizer seeing that member
+  - restarting the server, with all data and logins still there
+  - logout and login
+  - a normal organizer being blocked from `/admin`
+  - an admin hiding a club

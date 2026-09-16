@@ -11,7 +11,8 @@ export const metadata = { title: "Кабинет организатора", robo
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 
 export default async function OrgHome({ searchParams }: PageProps<"/org">) {
-  const { session, club, q } = await getManagedClub((await searchParams).club);
+  const sp = await searchParams;
+  const { session, club, q } = await getManagedClub(sp.club);
   const repo = getRepo();
   const now = new Date().toISOString();
   const [upcoming, all, snapshot] = await Promise.all([
@@ -30,6 +31,13 @@ export default async function OrgHome({ searchParams }: PageProps<"/org">) {
     <>
       <OrgNav clubName={club.name} q={q} isAdmin={session.isAdmin} />
       <main className="space-y-6 px-4 pb-12 pt-5">
+        {sp.welcome && (
+          <section className="card space-y-2 border-ok p-4">
+            <p className="font-semibold">🎉 Клуб создан!</p>
+            <p className="text-sm text-muted">Следующий шаг — создайте первую встречу и отправьте ссылку в чат и Instagram.</p>
+            <Link href={`/org/events/new${q}`} className="btn-primary btn-sm">Создать первую встречу</Link>
+          </section>
+        )}
         <section className="grid grid-cols-3 gap-2 text-center">
           <Stat label="участников" value={m.members} sub={`+${m.newMembers7d} за неделю`} />
           <Stat label="доходимость" value={pct(m.showRate)} sub="пришли / записались" />

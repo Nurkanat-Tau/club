@@ -16,6 +16,7 @@ export type Club = {
   schedule_text: string;
   color: string;
   is_founding: boolean;
+  hidden: boolean;
   created_at: string;
 };
 
@@ -66,7 +67,22 @@ export type Feedback = {
 
 export type Organizer = {
   email: string;
+  name: string;
   club_id: string | null;
+};
+
+export type NewClubInput = {
+  name: string;
+  category: string;
+  emoji: string;
+  color: string;
+  description: string;
+  schedule_text: string;
+  meeting_point: string;
+  chat_link: string | null;
+  instagram: string | null;
+  organizer_name: string;
+  organizer_bio: string;
 };
 
 export type LogType =
@@ -79,7 +95,8 @@ export type LogType =
   | "mark_attendance"
   | "feedback"
   | "click_chat"
-  | "create_event";
+  | "create_event"
+  | "create_club";
 
 export type LogEntry = {
   type: LogType;
@@ -127,7 +144,11 @@ export type Snapshot = {
 };
 
 export interface Repo {
+  /** Public list: hidden clubs are excluded. */
   listClubs(city: string): Promise<Club[]>;
+  /** Creates a club and its organizer account in one step. Throws EmailTakenError if the email is used. */
+  createClubWithOrganizer(city: string, club: NewClubInput, email: string, passwordHash: string): Promise<Club>;
+  setClubHidden(id: string, hidden: boolean): Promise<void>;
   getClubBySlug(slug: string): Promise<Club | null>;
   getClubById(id: string): Promise<Club | null>;
   updateClub(id: string, input: ClubInput): Promise<void>;
@@ -158,6 +179,13 @@ export interface Repo {
   listMemberFeedbackEventIds(memberId: string): Promise<string[]>;
 
   getOrganizer(email: string): Promise<Organizer | null>;
+  getPasswordHash(email: string): Promise<string | null>;
   log(entry: Omit<LogEntry, "created_at">): Promise<void>;
   snapshot(): Promise<Snapshot>;
+}
+
+export class EmailTakenError extends Error {
+  constructor() {
+    super("email_taken");
+  }
 }

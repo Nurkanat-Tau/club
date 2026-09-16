@@ -1,8 +1,7 @@
-import type { Snapshot, Club, ClubEvent, Member, Organizer } from "../types";
+import type { Snapshot, Club, ClubEvent, Member } from "../lib/types";
 
 /**
- * DEMO DATA. Used only when Supabase is not configured (local development / preview).
- * Organizer names are placeholders — replace them with real founders in Supabase.
+ * TEST FIXTURE ONLY. The app itself starts empty — every club, event and member comes from users.
  */
 const now = Date.now();
 const DAY = 86400000;
@@ -16,43 +15,41 @@ function at(daysFromToday: number, hourKz: number, minute = 0) {
   return new Date(utc).toISOString();
 }
 
-export const DEMO_PASSWORD = "demo";
-
 export const seedClubs: Club[] = [
   {
     id: "club-run", slug: "run", city: "shymkent", name: "Шымкент Бег и Прогулки", category: "Бег / ходьба", emoji: "🏃",
     description: "Бегаем и гуляем вместе каждую неделю. Любой уровень: можно идти пешком, можно бежать 5 км. Новичков встречаем и знакомим с группой.",
     organizer_name: "Организатор клуба", organizer_bio: "Основатель клуба. Бегает несколько лет, ведёт Instagram о спорте.",
     instagram: null, chat_link: "https://chat.whatsapp.com/", meeting_point: "Дендропарк, центральный вход",
-    schedule_text: "Каждую субботу в 08:00 и среду в 19:30", color: "#F97316", is_founding: true, created_at: iso(now - 30 * DAY),
+    schedule_text: "Каждую субботу в 08:00 и среду в 19:30", color: "#F97316", is_founding: true, hidden: false, created_at: iso(now - 30 * DAY),
   },
   {
     id: "club-english", slug: "english", city: "shymkent", name: "English Speaking Club", category: "Английский", emoji: "🗣️",
     description: "Живая практика английского без учебников: темы, игры, дебаты. Уровень от Pre-Intermediate. Ведущий — преподаватель с IELTS 7.5.",
     organizer_name: "Нурканат", organizer_bio: "Преподаватель английского, IELTS 7.5.",
     instagram: null, chat_link: "https://chat.whatsapp.com/", meeting_point: "Кофейня в центре (уточняется в чате)",
-    schedule_text: "Каждый четверг в 19:00", color: "#2563EB", is_founding: true, created_at: iso(now - 30 * DAY),
+    schedule_text: "Каждый четверг в 19:00", color: "#2563EB", is_founding: true, hidden: false, created_at: iso(now - 30 * DAY),
   },
   {
     id: "club-chess", slug: "chess", city: "shymkent", name: "Шахматы в кофейне", category: "Шахматы", emoji: "♟️",
     description: "Быстрые партии, разбор интересных позиций и дружеский турнир раз в месяц. Доски есть, приходите с друзьями.",
     organizer_name: "Организатор клуба", organizer_bio: "Шахматист, проводит турниры для любителей.",
     instagram: null, chat_link: null, meeting_point: "Антикафе (уточняется в чате)",
-    schedule_text: "Каждое воскресенье в 16:00", color: "#0F766E", is_founding: true, created_at: iso(now - 30 * DAY),
+    schedule_text: "Каждое воскресенье в 16:00", color: "#0F766E", is_founding: true, hidden: false, created_at: iso(now - 30 * DAY),
   },
   {
     id: "club-tennis", slug: "table-tennis", city: "shymkent", name: "Настольный теннис: любители", category: "Настольный теннис", emoji: "🏓",
     description: "Игры на вылет и мини-турниры для любителей. Ракетки можно взять на месте. Оплата стола делится между участниками.",
     organizer_name: "Организатор клуба", organizer_bio: "Тренер по настольному теннису.",
     instagram: null, chat_link: null, meeting_point: "Теннисный зал (адрес в чате)",
-    schedule_text: "Вторник и пятница в 20:00", color: "#DB2777", is_founding: true, created_at: iso(now - 30 * DAY),
+    schedule_text: "Вторник и пятница в 20:00", color: "#DB2777", is_founding: true, hidden: false, created_at: iso(now - 30 * DAY),
   },
   {
     id: "club-hike", slug: "hiking", city: "shymkent", name: "Горы рядом: походы", category: "Походы", emoji: "⛰️",
     description: "Однодневные выезды в горы и каньоны вокруг Шымкента. Маршруты для новичков, трансфер организуем вместе.",
     organizer_name: "Организатор клуба", organizer_bio: "Гид, водит группы по югу Казахстана.",
     instagram: null, chat_link: null, meeting_point: "Сбор у ТРЦ (уточняется)",
-    schedule_text: "Раз в две недели по воскресеньям", color: "#65A30D", is_founding: true, created_at: iso(now - 30 * DAY),
+    schedule_text: "Раз в две недели по воскресеньям", color: "#65A30D", is_founding: true, hidden: false, created_at: iso(now - 30 * DAY),
   },
 ];
 
@@ -84,15 +81,6 @@ const names = ["Айгерим", "Данияр", "Мадина", "Ерлан", "
 export const seedMembers: Member[] = names.map((name, i) => ({
   id: `m-${i + 1}`, name, phone: `+7700000${String(1000 + i).padStart(4, "0")}`, created_at: iso(now - (25 - i) * DAY),
 }));
-
-export const seedOrganizers: (Organizer & { password: string })[] = [
-  { email: "run@club.kz", club_id: "club-run", password: DEMO_PASSWORD },
-  { email: "english@club.kz", club_id: "club-english", password: DEMO_PASSWORD },
-  { email: "chess@club.kz", club_id: "club-chess", password: DEMO_PASSWORD },
-  { email: "tennis@club.kz", club_id: "club-tennis", password: DEMO_PASSWORD },
-  { email: "hike@club.kz", club_id: "club-hike", password: DEMO_PASSWORD },
-  { email: "admin@club.kz", club_id: null, password: DEMO_PASSWORD },
-];
 
 export function buildSeed(): Snapshot {
   const memberships: Snapshot["memberships"] = [];

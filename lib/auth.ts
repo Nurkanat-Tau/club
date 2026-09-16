@@ -1,9 +1,8 @@
 import "server-only";
-import { createClient } from "@supabase/supabase-js";
-import { DEMO_MODE } from "./data";
-import { seedOrganizers } from "./data/seed";
+import { getRepo } from "./data";
+import { checkPassword } from "./password";
 
-// Very small in-memory brute-force guard (per server instance).
+// Small in-memory brute-force guard (per server instance).
 const attempts = new Map<string, { count: number; until: number }>();
 
 export function tooManyAttempts(key: string) {
@@ -16,20 +15,22 @@ function recordFailure(key: string) {
   else a.count++;
 }
 
-/** Returns true if the email/password pair is valid. */
+/** True if the email/password pair matches an organizer account. */
 export async function verifyPassword(email: string, password: string): Promise<boolean> {
   const key = email.toLowerCase();
-  let ok = false;
-  if (DEMO_MODE) {
-    ok = seedOrganizers.some((o) => o.email === key && o.password === password);
-  } else {
-    const client = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { error } = await client.auth.signInWithPassword({ email: key, password });
-    ok = !error;
-  }
+  const ok = await checkPassword(password, await getRepo().getPasswordHash(key));
   if (ok) attempts.delete(key);
   else recordFailure(key);
   return ok;
+}
+
+// Club creation guard: at most 5 new clubs per visitor/IP per hour (per server instance).
+const creations = new Map<string, number[]>();
+export function tooManyClubs(key: string) {
+  const now = Date.now();
+  const list = (creations.get(key) ?? []).filter((t) => now - t < 3600_000);
+  creations.set(key, list);
+  if (list.length >= 5) return true;
+  list.push(now);
+  return false;
 }

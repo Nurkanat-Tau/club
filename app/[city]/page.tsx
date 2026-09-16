@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/data";
 import { getCity } from "@/lib/cities";
@@ -41,34 +42,45 @@ export default async function CityPage({ params }: PageProps<"/[city]">) {
           <h1 className="text-2xl font-bold tracking-tight">
             {member ? `Привет, ${member.name}!` : "Сообщества Шымкента"}
           </h1>
-          <p className="mt-1 text-muted">Выберите клуб и приходите на встречу — новичкам рады.</p>
+          <p className="mt-1 text-muted">
+            {clubs.length ? "Выберите клуб и приходите на встречу — новичкам рады." : "Здесь появятся клубы и встречи вашего города."}
+          </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Ближайшие встречи</h2>
           {events.length === 0 ? (
-            <p className="card p-4 text-muted">На этой неделе встреч пока нет. Загляните в клубы ниже.</p>
+            <p className="card p-4 text-muted">
+              {clubs.length ? "На этой неделе встреч пока нет. Загляните в клубы ниже." : "Пока нет встреч."}
+            </p>
           ) : (
             events.map((e) => <EventRow key={e.id} event={e} club={clubById.get(e.club_id)} going={going[e.id]} />)
           )}
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Клубы-основатели</h2>
+          <h2 className="text-lg font-semibold">Клубы{clubs.length ? ` · ${clubs.length}` : ""}</h2>
+          {clubs.length === 0 && (
+            <div className="card space-y-2 p-5">
+              <p className="font-semibold">Пока ни одного клуба</p>
+              <p className="text-sm text-muted">Собираете людей на пробежки, игры или разговорный клуб? Станьте первым.</p>
+            </div>
+          )}
           {clubs.map((c, i) => (
             <ClubCard key={c.id} club={c} members={counts[i]} />
           ))}
         </section>
 
-        {contact && (
-          <section className="card bg-soft p-5">
-            <h2 className="font-semibold">Хотите свой клуб в Club?</h2>
-            <p className="mt-1 text-sm text-muted">Мы ищем организаторов, которые готовы собирать людей регулярно.</p>
-            <a className="btn-ghost btn-sm mt-3" href={waLink(contact, "Здравствуйте! Хочу открыть клуб в Club.")}>
-              Написать нам
-            </a>
-          </section>
-        )}
+        <section className="card bg-soft p-5">
+          <h2 className="font-semibold">Организуете встречи?</h2>
+          <p className="mt-1 text-sm text-muted">Создайте страницу клуба за 2 минуты: запись, участники, напоминания. Бесплатно.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link className="btn-primary btn-sm" href="/new-club">Создать клуб</Link>
+            {contact && (
+              <a className="btn-ghost btn-sm" href={waLink(contact, "Здравствуйте! Вопрос про Club.")}>Написать нам</a>
+            )}
+          </div>
+        </section>
       </main>
     </>
   );

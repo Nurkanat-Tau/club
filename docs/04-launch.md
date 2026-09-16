@@ -2,7 +2,7 @@
 
 ## Organizer onboarding (30 min per organizer, in person)
 
-1. **Before:** create their Supabase user and `organizers` row (README step 4). Fill their club page with them — description in *their* words.
+1. **Before:** send them the link to `/new-club`, or sit with them while they create the club themselves (description in *their* words).
 2. **Together (15 min):** they log in on *their* phone, create their next event themselves, copy the invite, post it to their chat + Instagram story.
 3. **Agree the rhythm:** fixed day/time for 4 weeks. Put it in "Расписание".
 4. **Agree the 3 duties:** (a) event in Club ≥ 3 days before, (b) reminder via the WhatsApp buttons the day before, (c) mark attendance the same evening.

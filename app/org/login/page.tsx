@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { DEMO_MODE } from "@/lib/data";
+import Link from "next/link";
 import { getOrgSession } from "@/lib/session";
 import { LoginForm } from "@/components/LoginForm";
 
@@ -8,14 +8,16 @@ export const metadata = { title: "Вход для организаторов", r
 
 export default async function LoginPage() {
   const s = await getOrgSession();
-  if (s) redirect(s.club_id ? "/org" : "/admin");
+  if (s) redirect(s.isAdmin ? "/admin" : "/org");
   return (
     <main className="space-y-6 px-4 pt-12">
       <div>
         <h1 className="text-2xl font-bold">Вход для организаторов</h1>
-        <p className="text-muted">Доступ выдаёт команда Club. Нет доступа — напишите нам.</p>
+        <p className="text-muted">
+          Нет аккаунта? <Link href="/new-club" className="underline">Создайте клуб</Link>
+        </p>
       </div>
-      <LoginForm demo={DEMO_MODE} />
+      <LoginForm />
     </main>
   );
 }

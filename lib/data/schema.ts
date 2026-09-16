@@ -1,16 +1,16 @@
--- Club MVP schema. Run once in Supabase: Dashboard → SQL Editor → paste → Run.
--- All access goes through the Next.js server with the service-role key.
--- RLS is enabled on every table with NO policies, so the public anon key can read/write nothing.
-
-create extension if not exists pgcrypto;
-
+/**
+ * Database schema. Applied automatically (idempotent) the first time the app talks to the
+ * database, so a fresh, empty Postgres needs no manual setup. Mirror of db/schema.sql.
+ */
+export const SCHEMA_SQL = `
 create table if not exists clubs (
   id uuid primary key default gen_random_uuid(),
-  slug text not null unique check (slug ~ '^[a-z0-9-]{2,40}$'),
+  slug text not null unique,
   city text not null default 'shymkent',
   name text not null,
   category text not null,
   emoji text not null default '✨',
+  color text not null default '#ea580c',
   description text not null default '',
   organizer_name text not null default '',
   organizer_bio text not null default '',
@@ -18,8 +18,8 @@ create table if not exists clubs (
   chat_link text,
   meeting_point text not null default '',
   schedule_text text not null default '',
-  color text not null default '#ea580c',
   is_founding boolean not null default false,
+  hidden boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -43,7 +43,7 @@ create index if not exists events_starts on events (starts_at);
 create table if not exists members (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  phone text not null unique check (phone ~ '^\+77[0-9]{9}$'),
+  phone text not null unique,
   created_at timestamptz not null default now()
 );
 
@@ -75,15 +75,14 @@ create table if not exists feedback (
   primary key (event_id, member_id)
 );
 
--- Organizers log in with Supabase Auth (email + password). This table says which club they run.
--- club_id = null means an admin (also list the email in the ADMIN_EMAILS env variable).
 create table if not exists organizers (
-  email text primary key check (email = lower(email)),
+  email text primary key,
+  name text not null default '',
   club_id uuid references clubs(id) on delete set null,
+  password_hash text not null,
   created_at timestamptz not null default now()
 );
 
--- Product analytics. No foreign keys on purpose: logging must never fail a user action.
 create table if not exists logs (
   id bigserial primary key,
   type text not null,
@@ -94,12 +93,4 @@ create table if not exists logs (
   created_at timestamptz not null default now()
 );
 create index if not exists logs_created on logs (created_at);
-
-alter table clubs enable row level security;
-alter table events enable row level security;
-alter table members enable row level security;
-alter table memberships enable row level security;
-alter table rsvps enable row level security;
-alter table feedback enable row level security;
-alter table organizers enable row level security;
-alter table logs enable row level security;
+`;

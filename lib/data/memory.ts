@@ -1,18 +1,23 @@
 import { randomUUID } from "node:crypto";
-import type { Repo, Snapshot, ClubEvent } from "../types";
-import { buildSeed, seedOrganizers } from "./seed";
+import type { Repo, Snapshot, ClubEvent, Club, Organizer } from "../types";
+import { EmailTakenError } from "../types";
+import { slugify } from "../slug";
 
-type Store = Snapshot;
+type Store = Snapshot & { organizers: (Organizer & { password_hash: string })[] };
 const g = globalThis as unknown as { __clubStore?: Store };
 
+export const emptySnapshot = (): Snapshot => ({
+  clubs: [], events: [], members: [], memberships: [], rsvps: [], feedback: [], logs: [],
+});
+
 function store(): Store {
-  if (!g.__clubStore) g.__clubStore = buildSeed();
+  if (!g.__clubStore) g.__clubStore = { ...emptySnapshot(), organizers: [] };
   return g.__clubStore;
 }
 
-/** For tests. */
-export function resetMemoryStore(data?: Snapshot) {
-  g.__clubStore = data ?? buildSeed();
+/** For tests: start from given data (default: empty). */
+export function resetMemoryStore(data?: Snapshot, organizers: Store["organizers"] = []) {
+  g.__clubStore = { ...(data ? structuredClone(data) : emptySnapshot()), organizers };
 }
 
 const nowIso = () => new Date().toISOString();
@@ -21,7 +26,25 @@ const byStart = (a: ClubEvent, b: ClubEvent) => a.starts_at.localeCompare(b.star
 export function createMemoryRepo(): Repo {
   return {
     async listClubs(city) {
-      return store().clubs.filter((c) => c.city === city);
+      return store().clubs.filter((c) => c.city === city && !c.hidden);
+    },
+    async createClubWithOrganizer(city, c, email, passwordHash) {
+      const s = store();
+      if (s.organizers.some((o) => o.email === email)) throw new EmailTakenError();
+      const base = slugify(c.name);
+      let slug = base;
+      for (let i = 2; s.clubs.some((x) => x.slug === slug); i++) slug = `${base}-${i}`;
+      const club: Club = {
+        ...c, id: randomUUID(), slug, city, created_at: nowIso(), hidden: false,
+        is_founding: s.clubs.filter((x) => x.city === city).length < 5,
+      };
+      s.clubs.push(club);
+      s.organizers.push({ email, name: c.organizer_name, club_id: club.id, password_hash: passwordHash });
+      return club;
+    },
+    async setClubHidden(id, hidden) {
+      const c = store().clubs.find((x) => x.id === id);
+      if (c) c.hidden = hidden;
     },
     async getClubBySlug(slug) {
       return store().clubs.find((c) => c.slug === slug) ?? null;
@@ -36,7 +59,9 @@ export function createMemoryRepo(): Repo {
 
     async listEvents({ city, clubId, from, to, includeCancelled }) {
       const s = store();
-      const clubIds = city ? new Set(s.clubs.filter((c) => c.city === city).map((c) => c.id)) : null;
+      const clubIds = city
+        ? new Set(s.clubs.filter((c) => c.city === city && (clubId ? true : !c.hidden)).map((c) => c.id))
+        : clubId ? null : new Set(s.clubs.filter((c) => !c.hidden).map((c) => c.id));
       return s.events
         .filter((e) => (clubIds ? clubIds.has(e.club_id) : true))
         .filter((e) => (clubId ? e.club_id === clubId : true))
@@ -100,7 +125,7 @@ export function createMemoryRepo(): Repo {
     async listMemberClubs(memberId) {
       const s = store();
       const ids = new Set(s.memberships.filter((m) => m.member_id === memberId).map((m) => m.club_id));
-      return s.clubs.filter((c) => ids.has(c.id));
+      return s.clubs.filter((c) => ids.has(c.id) && !c.hidden);
     },
 
     async setRsvp(eventId, memberId, status) {
@@ -148,14 +173,19 @@ export function createMemoryRepo(): Repo {
     },
 
     async getOrganizer(email) {
-      const o = seedOrganizers.find((x) => x.email === email.toLowerCase());
-      return o ? { email: o.email, club_id: o.club_id } : null;
+      const o = store().organizers.find((x) => x.email === email.toLowerCase());
+      return o ? { email: o.email, name: o.name, club_id: o.club_id } : null;
+    },
+    async getPasswordHash(email) {
+      return store().organizers.find((x) => x.email === email.toLowerCase())?.password_hash ?? null;
     },
     async log(entry) {
       store().logs.push({ ...entry, created_at: nowIso() });
     },
     async snapshot() {
-      return structuredClone(store());
+      const { organizers: _o, ...snap } = store();
+      void _o;
+      return structuredClone(snap);
     },
   };
 }

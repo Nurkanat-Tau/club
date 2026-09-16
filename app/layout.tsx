@@ -21,7 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full font-sans">
         {DEMO_MODE && (
           <div className="bg-ink px-4 py-1.5 text-center text-xs text-bg">
-            Демо-режим: данные тестовые и сбрасываются при перезапуске
+            Тестовый режим без базы данных: всё введённое сотрётся при перезапуске
           </div>
         )}
         <div className="mx-auto flex min-h-full max-w-xl flex-col">{children}</div>

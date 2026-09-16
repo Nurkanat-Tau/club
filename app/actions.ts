@@ -7,11 +7,15 @@ import {
   clearCurrentMember, clearOrgSession, getCurrentMember, getOrgSession, getVisitorId,
   setCurrentMember, setOrgSession,
 } from "@/lib/session";
-import { tooManyAttempts, verifyPassword } from "@/lib/auth";
+import { tooManyAttempts, tooManyClubs, verifyPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/password";
+import { getCategory } from "@/lib/categories";
+import { getCity } from "@/lib/cities";
+import { headers } from "next/headers";
 import {
-  clubSchema, eventSchema, feedbackSchema, formErrors, memberSchema, pick, type FormState,
+  clubSchema, eventSchema, feedbackSchema, formErrors, memberSchema, newClubSchema, pick, type FormState,
 } from "@/lib/validation";
-import type { Member } from "@/lib/types";
+import { EmailTakenError, type Member } from "@/lib/types";
 
 /** Resolve the member: the one remembered on this device, or create/find one from the form. */
 async function resolveMember(fd: FormData): Promise<{ member?: Member; state?: FormState }> {
@@ -115,7 +119,51 @@ export async function loginAction(_prev: FormState, fd: FormData): Promise<FormS
   const org = valid ? await getRepo().getOrganizer(email) : null;
   if (!org) return { ok: false, message: "Неверный email или пароль", values };
   await setOrgSession(email);
-  redirect(org.club_id ? "/org" : "/admin");
+  const admin = (process.env.ADMIN_EMAILS ?? "").toLowerCase().split(",").map((x) => x.trim()).includes(email);
+  redirect(admin ? "/admin" : org.club_id ? "/org" : "/org/login");
+}
+
+export async function createClubAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const keys = ["name", "category", "description", "schedule_text", "meeting_point", "chat_link", "instagram", "organizer_name", "organizer_bio", "email", "password"];
+  const raw = pick(fd, keys);
+  const values = { ...raw, password: "" }; // never echo the password back
+  if ((fd.get("website") as string | null)?.trim()) return { ok: false, message: "Ошибка отправки", values };
+  const city = getCity(String(fd.get("city") ?? "shymkent"));
+  if (!city) return { ok: false, message: "Город недоступен", values };
+  const parsed = newClubSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values };
+  const h = await headers();
+  const who = (await getVisitorId()) ?? h.get("x-forwarded-for") ?? "anon";
+  if (tooManyClubs(who)) return { ok: false, message: "Слишком много новых клубов подряд. Попробуйте через час.", values };
+
+  const { email, password, category, ...rest } = parsed.data;
+  const cat = getCategory(category)!;
+  const repo = getRepo();
+  try {
+    const club = await repo.createClubWithOrganizer(
+      city.slug,
+      { ...rest, category: cat.label, emoji: cat.emoji, color: cat.color },
+      email,
+      await hashPassword(password),
+    );
+    await repo.log({ type: "create_club", visitor_id: await getVisitorId(), member_id: null, club_id: club.id, event_id: null });
+  } catch (e) {
+    if (e instanceof EmailTakenError)
+      return { ok: false, errors: { email: "Этот email уже зарегистрирован. Войдите в кабинет." }, values };
+    throw e;
+  }
+  await setOrgSession(email);
+  revalidatePath(`/${city.slug}`);
+  redirect("/org?welcome=1");
+}
+
+export async function setClubHiddenAction(fd: FormData) {
+  const s = await getOrgSession();
+  if (!s?.isAdmin) throw new Error("Forbidden");
+  const id = String(fd.get("club_id") ?? "");
+  await getRepo().setClubHidden(id, fd.get("hidden") === "1");
+  revalidatePath("/admin");
+  revalidatePath("/shymkent");
 }
 
 export async function logoutAction() {

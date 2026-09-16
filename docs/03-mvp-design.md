@@ -14,6 +14,7 @@ The MVP only needs to answer: **do people join, attend, and come back, and do or
 | Organizer: create/edit/cancel events, RSVP list, one-tap WhatsApp per person, copy-ready invite & reminder text | Saves organizer time (H4) |
 | Organizer: **mark attendance** | Without it we can't measure show rate or return rate at all |
 | Organizer: members list (+ CSV), edit club page | Basic ownership of their community |
+| **Self-service club creation** (`/new-club`), admin can hide clubs | The site starts empty; organizers bring their own communities |
 | Member: "My events", rate past events (1–5 + comment) | Feedback loop |
 | Admin `/admin`: experiment dashboard with the decision thresholds | Makes the continue/stop decision data-driven |
 | Anonymous visitor tracking + event log | Visitors → joins conversion, weekly active |
@@ -23,7 +24,6 @@ The MVP only needs to answer: **do people join, attend, and come back, and do or
 | In-app chat, announcements feed | WhatsApp already does this better. Revisit if organizers ask twice |
 | SMS / push notifications | Cost + complexity. Organizer sends WhatsApp reminders with one tap |
 | Passwords / SMS login for members | Friction. Device cookie + phone is enough for a pilot |
-| Self-service club creation | 5 hand-picked clubs. You create them |
 | Payments | No proof yet that paid events matter. Test by asking (see 01 §11) |
 | Native apps | PWA ("Add to Home Screen") is enough |
 | Kazakh language UI | Russian first for speed. **Add Kazakh in week 2 if feedback asks for it** — easy: strings are few |
@@ -51,7 +51,7 @@ Instagram / WhatsApp link
 ## Organizer flow
 
 ```
-/org/login (email + password, created by you)
+/new-club (organizer signs up: club details + email + password)  ·  /org/login
    │
    ▼
 /org ── stats (members, show rate, return rate) · upcoming · past ("отметьте посещение")
@@ -79,7 +79,7 @@ Admin (you): `/admin` → overall signal + KPIs + per-club table → click a clu
 12. **Club settings** `/org/club`
 13. **Admin dashboard** `/admin`
 
-## Database (Postgres on Supabase) — `supabase/schema.sql`
+## Database (Postgres) — `lib/data/schema.ts`
 
 ```
 clubs ──< events ──< rsvps >── members ──< memberships >── clubs
@@ -96,8 +96,8 @@ logs (type, visitor_id, member_id, club_id, event_id, created_at)
 
 - **Members:** no password. After the first join/RSVP we set a signed, httpOnly cookie (1 year). On a new device they type their name + phone again and are matched by phone.
   - *Known trade-off:* someone who knows your number could RSVP as you. Acceptable for a free pilot; upgrade to WhatsApp/SMS OTP if clubs become paid.
-- **Organizers & admin:** Supabase Auth email + password. You create accounts manually. After login we set our own signed cookie (30 days); every request re-checks the `organizers` table, so removing a row revokes access immediately.
-- **Admins:** email must be in `ADMIN_EMAILS` *and* in `organizers` with `club_id = null`.
+- **Organizers & admin:** sign up themselves on `/new-club` (email + password, scrypt-hashed in our own table). After login we set our own signed cookie (30 days); every request re-checks the `organizers` table, so removing a row revokes access immediately.
+- **Admins:** anyone whose email is in `ADMIN_EMAILS` (they sign up by creating a club).
 
 ## Technology stack
 
@@ -105,7 +105,7 @@ logs (type, visitor_id, member_id, club_id, event_id, created_at)
 |---|---|---|
 | App | **Next.js 16** (App Router, Server Components, Server Actions), TypeScript | One codebase for pages + backend; forms work without JavaScript; huge ecosystem |
 | Styling | Tailwind CSS 4 | Fast iteration, mobile-first |
-| Database + auth | **Supabase** (Postgres) | Free tier, real SQL, built-in auth, dashboard to edit data by hand |
+| Database | **Postgres** (Neon via Vercel Storage) | Free tier, one click from Vercel, schema applied automatically |
 | Hosting | **Vercel** | Free tier, deploy on every git push, HTTPS |
 | Validation | Zod | All form input checked on the server |
 | Tests | Vitest (unit) + Playwright script (end-to-end, run locally by me) | |
@@ -122,18 +122,18 @@ Next.js on Vercel ── proxy.ts: anonymous visitor cookie
    │  lib/validation   zod
    │  lib/data/        Repo interface
    │     ├─ memory.ts    demo mode (no DB)   ← `npm run dev` works instantly
-   │     └─ supabase.ts  production (service-role key, server only)
+   │     └─ postgres.ts  production (auto-creates tables)
    ▼
-Supabase Postgres (RLS on, no public policies) + Supabase Auth
+Postgres (Neon, connected through Vercel Storage)
 ```
 
-Everything goes through the server. The browser never talks to the database, so the Supabase key is never exposed.
+Everything goes through the server. The browser never talks to the database, and the connection string never leaves the server.
 
 ## Deployment
 
-See `README.md` → "Put it online". Summary: Supabase project → run `schema.sql` + `seed.sql` → create organizer users → import the GitHub repo into Vercel → add 4 env variables → deploy.
+See `README.md` → "Put it online". Summary: import the repo into Vercel → Storage → create a Neon Postgres database → set `SESSION_SECRET` and `ADMIN_EMAILS` → redeploy. Tables are created automatically.
 
-Cost at pilot scale: **₸0** (Supabase free + Vercel hobby). A custom domain is optional (~$10–15/year).
+Cost at pilot scale: **₸0** (Neon free + Vercel hobby). A custom domain is optional (~$10–15/year).
 
 ## Analytics
 
@@ -147,7 +147,7 @@ Anything else (e.g. "how did you hear about us?") → ask in person and write it
 
 - All mutations are server actions that **re-check authorization** (organizer can only touch their own club; admin can touch all).
 - Signed httpOnly `SameSite=Lax` cookies, `Secure` in production; `SESSION_SECRET` required in production.
-- Service-role key is server-only (`server-only` import guard); RLS enabled on all tables with no public policies.
+- Database access is server-only (`server-only` import guard); organizer passwords are scrypt-hashed; club creation is rate-limited and has a honeypot; admins can hide clubs.
 - Server-side validation (zod): phone format, lengths, URLs must be `http(s)` (blocks `javascript:` links).
 - Login brute-force guard (5 attempts / 15 min per email, per server instance).
 - Honeypot field against simple bots.
@@ -155,4 +155,4 @@ Anything else (e.g. "how did you hear about us?") → ask in person and write it
 - Consent checkbox + privacy page (Law of RK on personal data — **have the text reviewed before a wide launch**).
 - Production refuses to run in demo mode unless `ALLOW_DEMO=1`, so real people never type phones into a demo.
 
-Not yet (add before scaling): rate limiting at the edge (Vercel Firewall / Upstash), phone OTP, data-deletion self-service, audit log for organizer actions, backups policy (Supabase free tier has limited backups).
+Not yet (add before scaling): rate limiting at the edge (Vercel Firewall / Upstash), phone OTP, data-deletion self-service, audit log for organizer actions, backups policy (check the free tier's backup window).

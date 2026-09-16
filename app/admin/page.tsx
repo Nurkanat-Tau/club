@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getRepo } from "@/lib/data";
 import { getOrgSession } from "@/lib/session";
 import { computeMetrics } from "@/lib/metrics";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, setClubHiddenAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Метрики эксперимента", robots: { index: false } };
@@ -21,7 +21,9 @@ export default async function Admin() {
   const s = await getOrgSession();
   if (!s) redirect("/org/login");
   if (!s.isAdmin) redirect("/org");
-  const m = computeMetrics(await getRepo().snapshot());
+  const snap = await getRepo().snapshot();
+  const m = computeMetrics(snap);
+  const hidden = new Set(snap.clubs.filter((c) => c.hidden).map((c) => c.id));
   const t = m.totals;
   const v = VERDICT[m.verdict.level];
 
@@ -43,7 +45,10 @@ export default async function Admin() {
     <main className="space-y-6 px-4 pb-12 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Эксперимент: Шымкент</h1>
-        <form action={logoutAction}><button className="text-sm text-muted underline">Выйти</button></form>
+        <div className="flex items-center gap-3 text-sm">
+          {s.club_id && <Link href="/org" className="underline">Мой клуб</Link>}
+          <form action={logoutAction}><button className="text-muted underline">Выйти</button></form>
+        </div>
       </div>
 
       <section className={`rounded-3xl p-5 ${v.cls}`}>
@@ -70,12 +75,13 @@ export default async function Admin() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">По клубам</h2>
+        {m.clubs.length === 0 && <p className="card p-4 text-muted">Клубов пока нет. Они появятся, когда организаторы создадут их на /new-club.</p>}
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted">
               <tr>
                 <th className="p-3">Клуб</th><th className="p-3">Уч.</th><th className="p-3">Встреч</th>
-                <th className="p-3">Доход.</th><th className="p-3">Возвр.</th><th className="p-3">★</th>
+                <th className="p-3">Доход.</th><th className="p-3">Возвр.</th><th className="p-3">★</th><th className="p-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -83,6 +89,7 @@ export default async function Admin() {
                 <tr key={c.clubId}>
                   <td className="p-3">
                     <Link href={`/org?club=${c.clubId}`} className="font-medium underline">{c.emoji} {c.name}</Link>
+                    {hidden.has(c.clubId) && <div className="text-xs text-bad">скрыт с сайта</div>}
                     {!c.active && <div className="text-xs text-bad">нет встреч 14 дней</div>}
                   </td>
                   <td className="p-3">{c.members}</td>
@@ -90,6 +97,13 @@ export default async function Admin() {
                   <td className="p-3">{pct(c.showRate)}</td>
                   <td className="p-3">{pct(c.returnRate)}</td>
                   <td className="p-3">{c.avgRating ? c.avgRating.toFixed(1) : "—"}</td>
+                  <td className="p-3">
+                    <form action={setClubHiddenAction}>
+                      <input type="hidden" name="club_id" value={c.clubId} />
+                      <input type="hidden" name="hidden" value={hidden.has(c.clubId) ? "0" : "1"} />
+                      <button className="text-xs underline">{hidden.has(c.clubId) ? "Показать" : "Скрыть"}</button>
+                    </form>
+                  </td>
                 </tr>
               ))}
             </tbody>
