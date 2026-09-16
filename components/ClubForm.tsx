@@ -2,35 +2,30 @@
 import { useActionState } from "react";
 import { saveClubAction } from "@/app/actions";
 import { SubmitButton } from "./SubmitButton";
+import { ClubFields } from "./ClubFields";
+import { CATEGORIES } from "@/lib/categories";
 import type { Club } from "@/lib/types";
+import type { FormState } from "@/lib/validation";
 
 export function ClubForm({ club }: { club: Club }) {
-  const [state, action] = useActionState(saveClubAction, null);
-  const e = state?.errors ?? {};
-  const f = (name: keyof Club, label: string, opts: { area?: boolean; placeholder?: string; hint?: string } = {}) => (
-    <div>
-      <label className="label" htmlFor={name}>{label}</label>
-      {opts.area ? (
-        <textarea id={name} name={name} rows={5} className="input" defaultValue={state?.values?.[name] ?? (club[name] as string) ?? ""} />
-      ) : (
-        <input id={name} name={name} className="input" defaultValue={state?.values?.[name] ?? (club[name] as string) ?? ""} placeholder={opts.placeholder} />
-      )}
-      {opts.hint && <p className="mt-1 text-xs text-muted">{opts.hint}</p>}
-      {e[name] && <p className="err">{e[name]}</p>}
-    </div>
-  );
+  type State = (FormState & object) & { n?: number };
+  const [state, action] = useActionState<State | null, FormData>(async (prev, fd) => {
+    const r = await saveClubAction(prev, fd);
+    return r ? { ...r, n: (prev?.n ?? 0) + 1 } : null;
+  }, null);
+  const categoryId = CATEGORIES.find((c) => c.label === club.category)?.id ?? "other";
+  const initial: Record<string, string | null> = {
+    name: club.name, category: categoryId, description: club.description, schedule_text: club.schedule_text,
+    meeting_point: club.meeting_point, chat_link: club.chat_link, instagram: club.instagram,
+    organizer_name: club.organizer_name, organizer_bio: club.organizer_bio,
+  };
+  const v = state?.values ?? initial;
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-6">
       <input type="hidden" name="club_id" value={club.id} />
-      {f("description", "Описание клуба", { area: true })}
-      {f("schedule_text", "Расписание", { placeholder: "Каждую субботу в 08:00" })}
-      {f("meeting_point", "Место встречи")}
-      {f("chat_link", "Ссылка на чат WhatsApp / Telegram", { placeholder: "https://chat.whatsapp.com/...", hint: "Участники увидят её после вступления" })}
-      {f("organizer_name", "Имя организатора")}
-      {f("organizer_bio", "О себе", { area: true })}
-      {f("instagram", "Instagram (без @)", { placeholder: "shymkent.run" })}
-      {state?.message && <p className={state.ok ? "text-sm text-ok" : "err"}>{state.message}</p>}
-      <SubmitButton>Сохранить</SubmitButton>
+      <ClubFields values={v} errors={state?.errors ?? {}} formKey={state?.n ?? 0} />
+      {state?.message && <p className={state.ok ? "text-sm font-semibold text-ok" : "err"}>{state.message}</p>}
+      <SubmitButton>Сохранить изменения</SubmitButton>
     </form>
   );
 }

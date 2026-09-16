@@ -1,5 +1,5 @@
 import { Pool, types, type PoolClient } from "pg";
-import type { Club, ClubEvent, Member, Repo, Rsvp, Snapshot } from "../types";
+import type { Club, ClubEvent, Member, NewClubInput, Repo, Rsvp, Snapshot } from "../types";
 import { EmailTakenError } from "../types";
 import { slugify } from "../slug";
 import { SCHEMA_SQL } from "./schema";
@@ -53,6 +53,26 @@ export function createPostgresRepo(connectionString: string): Repo {
     }
   }
 
+  async function insertClub(db: PoolClient, city: string, c: NewClubInput): Promise<Club> {
+    const base = slugify(c.name);
+    let slug = base;
+    for (let i = 2; ; i++) {
+      const r = await db.query("select 1 from clubs where slug = $1", [slug]);
+      if (!r.rowCount) break;
+      slug = `${base}-${i}`;
+    }
+    const founding = (await db.query("select count(*) as n from clubs where city = $1", [city])).rows[0].n < 5;
+    return (
+      await db.query(
+        `insert into clubs (slug, city, name, category, emoji, color, description, organizer_name, organizer_bio,
+           instagram, chat_link, meeting_point, schedule_text, is_founding)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`,
+        [slug, city, c.name, c.category, c.emoji, c.color, c.description, c.organizer_name, c.organizer_bio,
+          c.instagram, c.chat_link, c.meeting_point, c.schedule_text, founding],
+      )
+    ).rows[0] as Club;
+  }
+
   return {
     async listClubs(city) {
       return q<Club>("select * from clubs where city = $1 and not hidden order by created_at", [city]);
@@ -61,28 +81,28 @@ export function createPostgresRepo(connectionString: string): Repo {
       return tx(async (db) => {
         const taken = await db.query("select 1 from organizers where email = $1", [email]);
         if (taken.rowCount) throw new EmailTakenError();
-        const base = slugify(c.name);
-        let slug = base;
-        for (let i = 2; ; i++) {
-          const r = await db.query("select 1 from clubs where slug = $1", [slug]);
-          if (!r.rowCount) break;
-          slug = `${base}-${i}`;
-        }
-        const founding = (await db.query("select count(*) as n from clubs where city = $1", [city])).rows[0].n < 5;
-        const club = (
-          await db.query(
-            `insert into clubs (slug, city, name, category, emoji, color, description, organizer_name, organizer_bio,
-               instagram, chat_link, meeting_point, schedule_text, is_founding)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`,
-            [slug, city, c.name, c.category, c.emoji, c.color, c.description, c.organizer_name, c.organizer_bio,
-              c.instagram, c.chat_link, c.meeting_point, c.schedule_text, founding],
-          )
-        ).rows[0] as Club;
+        const club = await insertClub(db, city, c);
         await db.query("insert into organizers (email, name, club_id, password_hash) values ($1,$2,$3,$4)", [
           email, c.organizer_name, club.id, passwordHash,
         ]);
         return club;
       });
+    },
+    async createClubForOrganizer(city, c, email) {
+      return tx(async (db) => {
+        const o = await db.query("select club_id from organizers where email = $1 for update", [email]);
+        if (!o.rowCount || o.rows[0].club_id) return null;
+        const club = await insertClub(db, city, c);
+        await db.query("update organizers set club_id = $1, name = $2 where email = $3", [club.id, c.organizer_name, email]);
+        return club;
+      });
+    },
+    async deleteClub(id) {
+      if (!isUuid(id)) return;
+      await q("delete from clubs where id = $1", [id]); // cascades; organizers.club_id becomes null
+    },
+    async deleteAllClubs() {
+      return (await one<{ n: number }>("with d as (delete from clubs returning 1) select count(*) as n from d"))!.n;
     },
     async setClubHidden(id, hidden) {
       await q("update clubs set hidden = $2 where id = $1", [id, hidden]);
@@ -96,10 +116,12 @@ export function createPostgresRepo(connectionString: string): Repo {
     },
     async updateClub(id, i) {
       await q(
-        `update clubs set description=$2, organizer_name=$3, organizer_bio=$4, instagram=$5, chat_link=$6,
-           meeting_point=$7, schedule_text=$8 where id=$1`,
-        [id, i.description, i.organizer_name, i.organizer_bio, i.instagram, i.chat_link, i.meeting_point, i.schedule_text],
+        `update clubs set name=$2, category=$3, emoji=$4, color=$5, description=$6, organizer_name=$7, organizer_bio=$8,
+           instagram=$9, chat_link=$10, meeting_point=$11, schedule_text=$12 where id=$1`,
+        [id, i.name, i.category, i.emoji, i.color, i.description, i.organizer_name, i.organizer_bio, i.instagram,
+          i.chat_link, i.meeting_point, i.schedule_text],
       );
+      await q("update organizers set name = $2 where club_id = $1", [id, i.organizer_name]);
     },
 
     async listEvents({ city, clubId, from, to, includeCancelled }) {

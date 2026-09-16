@@ -17,7 +17,7 @@ export function OrgNav({ clubName, q, isAdmin }: { clubName: string; q: string; 
         <Link href={`/org${q}`} className="chip shrink-0 whitespace-nowrap py-1.5">Встречи</Link>
         <Link href={`/org/events/new${q}`} className="chip shrink-0 whitespace-nowrap py-1.5">+ Новая встреча</Link>
         <Link href={`/org/members${q}`} className="chip shrink-0 whitespace-nowrap py-1.5">Участники</Link>
-        <Link href={`/org/club${q}`} className="chip shrink-0 whitespace-nowrap py-1.5">Клуб</Link>
+        <Link href={`/org/club${q}`} className="chip shrink-0 whitespace-nowrap py-1.5">Редактировать клуб</Link>
         {isAdmin && <Link href="/admin" className="chip shrink-0 whitespace-nowrap py-1.5">Админ</Link>}
       </nav>
     </header>

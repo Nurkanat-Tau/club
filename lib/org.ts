@@ -9,7 +9,7 @@ export async function getManagedClub(clubParam?: string | string[]) {
   if (!session) redirect("/org/login");
   const wanted = typeof clubParam === "string" ? clubParam : undefined;
   const clubId = session.isAdmin ? wanted ?? session.club_id : session.club_id;
-  if (!clubId) redirect("/admin");
+  if (!clubId) redirect(session.isAdmin ? "/admin" : "/new-club");
   const club = await getRepo().getClubById(clubId);
   if (!club) notFound();
   const q = session.isAdmin ? `?club=${club.id}` : "";

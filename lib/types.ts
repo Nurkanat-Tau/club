@@ -124,16 +124,7 @@ export type EventInput = {
   price_text: string | null;
 };
 
-export type ClubInput = Pick<
-  Club,
-  | "description"
-  | "organizer_name"
-  | "organizer_bio"
-  | "instagram"
-  | "chat_link"
-  | "meeting_point"
-  | "schedule_text"
->;
+export type ClubInput = NewClubInput;
 
 export type RsvpWithMember = Rsvp & { member: Member };
 export type MemberWithJoin = Member & { joined_at: string; attended_count: number };
@@ -155,6 +146,11 @@ export interface Repo {
   /** Creates a club and its organizer account in one step. Throws EmailTakenError if the email is used. */
   createClubWithOrganizer(city: string, club: NewClubInput, email: string, passwordHash: string): Promise<Club>;
   setClubHidden(id: string, hidden: boolean): Promise<void>;
+  /** Existing organizer account without a club gets a new club. Returns null if the account already has one. */
+  createClubForOrganizer(city: string, club: NewClubInput, email: string): Promise<Club | null>;
+  /** Permanently deletes a club with its events, sign-ups and memberships. Its organizer keeps the account. */
+  deleteClub(id: string): Promise<void>;
+  deleteAllClubs(): Promise<number>;
   getClubBySlug(slug: string): Promise<Club | null>;
   getClubById(id: string): Promise<Club | null>;
   updateClub(id: string, input: ClubInput): Promise<void>;

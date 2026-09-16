@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Repo, Snapshot, ClubEvent, Club, Organizer } from "../types";
+import type { Repo, Snapshot, ClubEvent, Club, Organizer, NewClubInput } from "../types";
 import { EmailTakenError } from "../types";
 import { slugify } from "../slug";
 
@@ -24,6 +24,19 @@ export function resetMemoryStore(data?: Snapshot, organizers: Store["organizers"
 const nowIso = () => new Date().toISOString();
 const byStart = (a: ClubEvent, b: ClubEvent) => a.starts_at.localeCompare(b.starts_at);
 
+function insertClub(city: string, c: NewClubInput): Club {
+  const s = store();
+  const base = slugify(c.name);
+  let slug = base;
+  for (let i = 2; s.clubs.some((x) => x.slug === slug); i++) slug = `${base}-${i}`;
+  const club: Club = {
+    ...c, id: randomUUID(), slug, city, created_at: nowIso(), hidden: false,
+    is_founding: s.clubs.filter((x) => x.city === city).length < 5,
+  };
+  s.clubs.push(club);
+  return club;
+}
+
 export function createMemoryRepo(): Repo {
   return {
     async listClubs(city) {
@@ -32,16 +45,32 @@ export function createMemoryRepo(): Repo {
     async createClubWithOrganizer(city, c, email, passwordHash) {
       const s = store();
       if (s.organizers.some((o) => o.email === email)) throw new EmailTakenError();
-      const base = slugify(c.name);
-      let slug = base;
-      for (let i = 2; s.clubs.some((x) => x.slug === slug); i++) slug = `${base}-${i}`;
-      const club: Club = {
-        ...c, id: randomUUID(), slug, city, created_at: nowIso(), hidden: false,
-        is_founding: s.clubs.filter((x) => x.city === city).length < 5,
-      };
-      s.clubs.push(club);
+      const club = insertClub(city, c);
       s.organizers.push({ email, name: c.organizer_name, club_id: club.id, password_hash: passwordHash });
       return club;
+    },
+    async createClubForOrganizer(city, c, email) {
+      const o = store().organizers.find((x) => x.email === email);
+      if (!o || o.club_id) return null;
+      const club = insertClub(city, c);
+      o.club_id = club.id;
+      o.name = c.organizer_name;
+      return club;
+    },
+    async deleteClub(id) {
+      const s = store();
+      const evIds = new Set(s.events.filter((e) => e.club_id === id).map((e) => e.id));
+      s.clubs = s.clubs.filter((c) => c.id !== id);
+      s.events = s.events.filter((e) => e.club_id !== id);
+      s.rsvps = s.rsvps.filter((r) => !evIds.has(r.event_id));
+      s.feedback = s.feedback.filter((f) => !evIds.has(f.event_id));
+      s.memberships = s.memberships.filter((m) => m.club_id !== id);
+      s.organizers.forEach((o) => { if (o.club_id === id) o.club_id = null; });
+    },
+    async deleteAllClubs() {
+      const ids = store().clubs.map((c) => c.id);
+      for (const id of ids) await this.deleteClub(id);
+      return ids.length;
     },
     async setClubHidden(id, hidden) {
       const c = store().clubs.find((x) => x.id === id);
@@ -54,8 +83,10 @@ export function createMemoryRepo(): Repo {
       return store().clubs.find((c) => c.id === id) ?? null;
     },
     async updateClub(id, input) {
-      const c = store().clubs.find((x) => x.id === id);
+      const s = store();
+      const c = s.clubs.find((x) => x.id === id);
       if (c) Object.assign(c, input);
+      s.organizers.forEach((o) => { if (o.club_id === id) o.name = input.organizer_name; });
     },
 
     async listEvents({ city, clubId, from, to, includeCancelled }) {

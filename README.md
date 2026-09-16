@@ -22,7 +22,9 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 - create, edit and cancel events
 - see who's coming and send each person a WhatsApp reminder in one tap
 - mark who actually came
-- see their members and edit the club page
+- see their members
+- edit everything on the club page (name, category, description, schedule, place, chat, Instagram, organizer info); the club's link stays the same
+- delete their club (they type the club name to confirm). Its events, sign-ups and member list are deleted for good. Their account stays, so they can create a new club.
 
 **Members** browse the city page, join a club and tap "Я приду" on events. The first time, they enter a name, their WhatsApp number and a 4–6 digit PIN they choose. After that:
 
@@ -32,7 +34,13 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 
 They can also rate past events.
 
-**Admins** (emails listed in `ADMIN_EMAILS`) sign up by creating a club like anyone else. Then `/admin` shows the experiment dashboard and lets them hide spam clubs.
+**Admins** (emails listed in `ADMIN_EMAILS`) sign up by creating a club like anyone else. Then `/admin` shows the experiment dashboard and lets them:
+
+- hide or show any club
+- edit or delete any club ("Изменить / удалить")
+- delete **all** clubs at once (type «УДАЛИТЬ ВСЁ» to confirm)
+
+Member profiles and organizer accounts are kept.
 
 ---
 
@@ -70,6 +78,7 @@ Every push to `main` redeploys automatically.
 | Task | Where |
 |---|---|
 | Hide a spam or inactive club | `/admin` → "Скрыть" |
+| Delete one club / all clubs | `/admin` → "Изменить / удалить", or "Удалить все клубы" at the bottom |
 | Look at or export raw data | Vercel → Storage → your database → SQL editor / Neon console |
 | Delete a person's data on request | `delete from members where phone = '+77…';` (their memberships, RSVPs and ratings go too) |
 | A member forgot their PIN | `update members set pin_hash = null where phone = '+77…';` Their next sign-up or sign-in sets a new PIN. |
@@ -127,3 +136,5 @@ tests/             unit tests
   - logout and login
   - a normal organizer being blocked from `/admin`
   - an admin hiding a club
+  - an organizer editing every field and deleting their own club (a wrong confirmation is refused, and the events and sign-ups disappear), then starting a new club
+  - an admin deleting another organizer's club, then deleting all clubs

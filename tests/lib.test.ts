@@ -105,6 +105,31 @@ describe("memory repo (empty start)", () => {
     await repo.setClubHidden(a.id, true);
     expect((await repo.listClubs("shymkent")).map((c) => c.id)).toEqual([b.id]);
   });
+  it("edits, deletes and re-creates a club for the same organizer", async () => {
+    const repo = createMemoryRepo();
+    const a = await repo.createClubWithOrganizer("shymkent", newClub, "a@x.kz", "h1");
+    const ev = await repo.createEvent(a.id, { title: "t", description: "", starts_at: new Date().toISOString(), duration_min: 60, location_name: "x", location_url: null, capacity: null, price_text: null });
+    const m = await repo.upsertMemberByPhone("M", "+77010000001");
+    await repo.joinClub(a.id, m.id, null);
+    await repo.setRsvp(ev.id, m.id, "going");
+    await repo.updateClub(a.id, { ...newClub, name: "Новое имя", organizer_name: "Ерлан Б." });
+    expect((await repo.getClubById(a.id))?.name).toBe("Новое имя");
+    expect((await repo.getClubById(a.id))?.slug).toBe(a.slug); // links stay the same
+    expect((await repo.getOrganizer("a@x.kz"))?.name).toBe("Ерлан Б.");
+    expect(await repo.createClubForOrganizer("shymkent", newClub, "a@x.kz")).toBeNull(); // already has one
+    await repo.deleteClub(a.id);
+    expect(await repo.getClubById(a.id)).toBeNull();
+    expect(await repo.getEvent(ev.id)).toBeNull();
+    expect(await repo.getRsvp(ev.id, m.id)).toBeNull();
+    expect(await repo.listMemberClubs(m.id)).toEqual([]);
+    expect(await repo.getMember(m.id)).not.toBeNull(); // member profile stays
+    expect((await repo.getOrganizer("a@x.kz"))?.club_id).toBeNull();
+    const again = await repo.createClubForOrganizer("shymkent", newClub, "a@x.kz");
+    expect((await repo.getOrganizer("a@x.kz"))?.club_id).toBe(again?.id);
+    await repo.createClubWithOrganizer("shymkent", newClub, "b@x.kz", "h2");
+    expect(await repo.deleteAllClubs()).toBe(2);
+    expect(await repo.listClubs("shymkent")).toEqual([]);
+  });
 });
 
 describe("member PIN (memory)", () => {

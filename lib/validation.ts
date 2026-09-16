@@ -44,17 +44,8 @@ export const eventSchema = z.object({
   price_text: str(100).transform((v) => (v === "" ? null : v)),
 });
 
-export const clubSchema = z.object({
-  description: str(2000).min(10, "Опишите клуб подробнее"),
-  organizer_name: str(80).min(2, "Укажите имя организатора"),
-  organizer_bio: str(500).default(""),
-  instagram: str(60).transform((v) => (v === "" ? null : v.replace(/^@/, ""))),
-  chat_link: optionalUrl,
-  meeting_point: str(200).min(2, "Укажите место встречи"),
-  schedule_text: str(200).min(2, "Укажите расписание"),
-});
 
-export const newClubSchema = z.object({
+export const clubSchema = z.object({
   name: str(60).min(3, "Название — минимум 3 символа"),
   category: z.string().refine((v) => !!getCategory(v), "Выберите категорию"),
   description: str(2000).min(20, "Опишите клуб подробнее (минимум 20 символов)"),
@@ -64,9 +55,14 @@ export const newClubSchema = z.object({
   instagram: str(60).transform((v) => (v === "" ? null : v.replace(/^@/, ""))),
   organizer_name: str(80).min(2, "Укажите ваше имя"),
   organizer_bio: str(500).default(""),
+});
+
+export const accountSchema = z.object({
   email: z.string().trim().toLowerCase().max(200).email("Введите корректный email"),
   password: z.string().min(8, "Пароль — минимум 8 символов").max(200),
 });
+
+export const newClubSchema = clubSchema.extend(accountSchema.shape);
 
 export const feedbackSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),

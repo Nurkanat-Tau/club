@@ -74,9 +74,22 @@ describe.skipIf(!url)("postgres repo", () => {
     expect(await repo.listClubs("shymkent")).toEqual([]);
     expect((await repo.listEvents({ city: "shymkent" })).length).toBe(0);
     expect((await repo.listEvents({ clubId: club.id })).length).toBe(1);
+    // edit + delete + re-create
+    await repo.updateClub(club.id, { ...club, name: "Переименован", organizer_name: "Алия К." });
+    expect((await repo.getClubById(club.id))?.name).toBe("Переименован");
+    expect((await repo.getOrganizer("aliya@x.kz"))?.name).toBe("Алия К.");
+    expect(await repo.createClubForOrganizer("shymkent", club, "aliya@x.kz")).toBeNull();
+    await repo.deleteClub(club.id);
+    expect(await repo.getEvent(ev.id)).toBeNull();
+    expect(await repo.countMembers(club.id)).toBe(0);
+    expect(await repo.getMember(m.id)).not.toBeNull();
+    expect((await repo.getOrganizer("aliya@x.kz"))?.club_id).toBeNull();
+    const again = await repo.createClubForOrganizer("shymkent", { ...club, organizer_bio: "" }, "aliya@x.kz");
+    expect(again?.slug).toBe("beg-po-subbotam");
+    expect(await repo.deleteAllClubs()).toBe(1);
     await repo.log({ type: "view_city", visitor_id: "v1", member_id: "garbage", club_id: null, event_id: null });
     const snap = await repo.snapshot();
-    expect(snap.feedback[0].rating).toBe(4);
+    expect(snap.feedback).toEqual([]); // deleted with the club
     expect(snap.logs.length).toBe(1);
   });
 });

@@ -4,6 +4,7 @@ import { getRepo } from "@/lib/data";
 import { getOrgSession } from "@/lib/session";
 import { computeMetrics } from "@/lib/metrics";
 import { logoutAction, setClubHiddenAction } from "@/app/actions";
+import { DeleteAllClubsForm } from "@/components/DeleteAllClubsForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Метрики эксперимента", robots: { index: false } };
@@ -17,7 +18,9 @@ const VERDICT = {
   stop: { label: "Стоп-сигнал", cls: "bg-bad text-white" },
 } as const;
 
-export default async function Admin() {
+export default async function Admin({ searchParams }: PageProps<"/admin">) {
+  const sp = await searchParams;
+  const deleted = sp.deleted === "all" ? `Все клубы удалены (${Number(sp.n) || 0}).` : sp.deleted ? "Клуб удалён." : null;
   const s = await getOrgSession();
   if (!s) redirect("/org/login");
   if (!s.isAdmin) redirect("/org");
@@ -46,11 +49,12 @@ export default async function Admin() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Эксперимент: Шымкент</h1>
         <div className="flex items-center gap-3 text-sm">
-          {s.club_id && <Link href="/org" className="underline">Мой клуб</Link>}
+          {s.club_id ? <Link href="/org" className="underline">Мой клуб</Link> : <Link href="/new-club" className="underline">Создать клуб</Link>}
           <form action={logoutAction}><button className="text-muted underline">Выйти</button></form>
         </div>
       </div>
 
+      {deleted && <p className="card p-4 font-semibold">{deleted}</p>}
       <section className={`rounded-3xl p-5 ${v.cls}`}>
         <div className="text-sm font-medium opacity-80">Сигнал</div>
         <div className="text-2xl font-bold">{v.label}</div>
@@ -103,6 +107,7 @@ export default async function Admin() {
                       <input type="hidden" name="hidden" value={hidden.has(c.clubId) ? "0" : "1"} />
                       <button className="text-xs underline">{hidden.has(c.clubId) ? "Показать" : "Скрыть"}</button>
                     </form>
+                    <Link href={`/org/club?club=${c.clubId}`} className="text-xs underline">Изменить / удалить</Link>
                   </td>
                 </tr>
               ))}
@@ -110,6 +115,7 @@ export default async function Admin() {
           </table>
         </div>
       </section>
+      {m.clubs.length > 0 && <DeleteAllClubsForm count={m.clubs.length} />}
       <p className="text-xs text-muted">Обновлено: {new Date(m.generatedAt).toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}. Пороговые значения — в docs/01-validation.md.</p>
     </main>
   );

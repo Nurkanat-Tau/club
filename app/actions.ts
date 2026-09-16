@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { z } from "zod";
 import { redirect } from "next/navigation";
 import { getRepo } from "@/lib/data";
 import {
@@ -13,7 +14,7 @@ import { getCategory } from "@/lib/categories";
 import { getCity } from "@/lib/cities";
 import { headers } from "next/headers";
 import {
-  clubSchema, eventSchema, feedbackSchema, formErrors, memberLoginSchema, memberSchema, newClubSchema, pick, type FormState,
+  accountSchema, clubSchema, eventSchema, feedbackSchema, formErrors, memberLoginSchema, memberSchema, newClubSchema, pick, type FormState,
 } from "@/lib/validation";
 import { EmailTakenError, type Member } from "@/lib/types";
 
@@ -173,38 +174,79 @@ export async function loginAction(_prev: FormState, fd: FormData): Promise<FormS
   redirect(admin ? "/admin" : org.club_id ? "/org" : "/org/login");
 }
 
+const CLUB_KEYS = ["name", "category", "description", "schedule_text", "meeting_point", "chat_link", "instagram", "organizer_name", "organizer_bio"];
+
+function clubFromForm(data: z.infer<typeof clubSchema>) {
+  const cat = getCategory(data.category)!;
+  return { ...data, category: cat.label, emoji: cat.emoji, color: cat.color };
+}
+
 export async function createClubAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const keys = ["name", "category", "description", "schedule_text", "meeting_point", "chat_link", "instagram", "organizer_name", "organizer_bio", "email", "password"];
-  const raw = pick(fd, keys);
+  const session = await getOrgSession();
+  const signedInWithoutClub = !!session && !session.club_id;
+  const raw = pick(fd, signedInWithoutClub ? CLUB_KEYS : [...CLUB_KEYS, "email", "password"]);
   const values = { ...raw, password: "" }; // never echo the password back
   if ((fd.get("website") as string | null)?.trim()) return { ok: false, message: "Ошибка отправки", values };
   const city = getCity(String(fd.get("city") ?? "shymkent"));
   if (!city) return { ok: false, message: "Город недоступен", values };
-  const parsed = newClubSchema.safeParse(raw);
+  const parsed = (signedInWithoutClub ? clubSchema : newClubSchema).safeParse(raw);
   if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values };
   const h = await headers();
   const who = (await getVisitorId()) ?? h.get("x-forwarded-for") ?? "anon";
   if (tooManyClubs(who)) return { ok: false, message: "Слишком много новых клубов подряд. Попробуйте через час.", values };
 
-  const { email, password, category, ...rest } = parsed.data;
-  const cat = getCategory(category)!;
   const repo = getRepo();
-  try {
-    const club = await repo.createClubWithOrganizer(
-      city.slug,
-      { ...rest, category: cat.label, emoji: cat.emoji, color: cat.color },
-      email,
-      await hashPassword(password),
-    );
-    await repo.log({ type: "create_club", visitor_id: await getVisitorId(), member_id: null, club_id: club.id, event_id: null });
-  } catch (e) {
-    if (e instanceof EmailTakenError)
-      return { ok: false, errors: { email: "Этот email уже зарегистрирован. Войдите в кабинет." }, values };
-    throw e;
+  const input = clubFromForm(parsed.data);
+  let club;
+  let email: string;
+  if (signedInWithoutClub) {
+    email = session!.email;
+    club = await repo.createClubForOrganizer(city.slug, input, email);
+    if (!club) return { ok: false, message: "У вас уже есть клуб.", values };
+  } else {
+    const acc = accountSchema.parse(raw);
+    email = acc.email;
+    try {
+      club = await repo.createClubWithOrganizer(city.slug, input, email, await hashPassword(acc.password));
+    } catch (e) {
+      if (!(e instanceof EmailTakenError)) throw e;
+      // Existing account whose club was deleted: the right password lets them start a new club.
+      const existing = await repo.getOrganizer(email);
+      const pwOk = !tooManyAttempts(email) && (await verifyPassword(email, acc.password));
+      club = existing && !existing.club_id && pwOk ? await repo.createClubForOrganizer(city.slug, input, email) : null;
+      if (!club)
+        return { ok: false, errors: { email: "Этот email уже зарегистрирован. Войдите в кабинет или введите верный пароль." }, values };
+    }
   }
+  await repo.log({ type: "create_club", visitor_id: await getVisitorId(), member_id: null, club_id: club.id, event_id: null });
   await setOrgSession(email);
   revalidatePath(`/${city.slug}`);
   redirect("/org?welcome=1");
+}
+
+export async function deleteClubAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const repo = getRepo();
+  const club = await repo.getClubById(String(fd.get("club_id") ?? ""));
+  if (!club) return { ok: false, message: "Клуб не найден" };
+  const session = await requireClubAccess(club.id);
+  const typed = String(fd.get("confirm") ?? "").trim().toLowerCase();
+  if (typed !== club.name.trim().toLowerCase())
+    return { ok: false, errors: { confirm: "Название не совпадает — клуб не удалён." } };
+  await repo.deleteClub(club.id);
+  revalidatePath(`/${club.city}`);
+  revalidatePath(`/c/${club.slug}`);
+  revalidatePath("/admin");
+  redirect(session.club_id === club.id ? "/new-club?deleted=1" : "/admin?deleted=1");
+}
+
+export async function deleteAllClubsAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const s = await getOrgSession();
+  if (!s?.isAdmin) throw new Error("Forbidden");
+  if (String(fd.get("confirm") ?? "").trim().toUpperCase() !== "УДАЛИТЬ ВСЁ")
+    return { ok: false, errors: { confirm: "Введите «УДАЛИТЬ ВСЁ», чтобы подтвердить." } };
+  const n = await getRepo().deleteAllClubs();
+  revalidatePath("/shymkent");
+  redirect(`/admin?deleted=all&n=${n}`);
 }
 
 export async function setClubHiddenAction(fd: FormData) {
@@ -271,12 +313,15 @@ export async function markAttendanceAction(fd: FormData) {
 export async function saveClubAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const clubId = String(fd.get("club_id") ?? "");
   await requireClubAccess(clubId);
-  const raw = pick(fd, ["description", "organizer_name", "organizer_bio", "instagram", "chat_link", "meeting_point", "schedule_text"]);
+  const raw = pick(fd, CLUB_KEYS);
   const parsed = clubSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values: raw };
   const repo = getRepo();
-  await repo.updateClub(clubId, parsed.data);
+  await repo.updateClub(clubId, clubFromForm(parsed.data));
   const club = await repo.getClubById(clubId);
-  if (club) revalidatePath(`/c/${club.slug}`);
-  return { ok: true, message: "Сохранено" };
+  if (club) {
+    revalidatePath(`/c/${club.slug}`);
+    revalidatePath(`/${club.city}`);
+  }
+  return { ok: true, message: "Сохранено", values: raw };
 }
