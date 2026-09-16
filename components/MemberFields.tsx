@@ -13,6 +13,14 @@ export function MemberFields({ errors, values }: { errors?: Record<string, strin
         {errors?.phone && <p className="err">{errors.phone}</p>}
         <p className="mt-1 text-xs text-muted">Номер видит только организатор — чтобы напомнить о встрече.</p>
       </div>
+      <div>
+        <label className="label" htmlFor="pin">PIN-код (4–6 цифр)</label>
+        <input id="pin" name="pin" required type="password" inputMode="numeric" pattern="[0-9]{4,6}" minLength={4} maxLength={6} autoComplete="current-password" className="input" placeholder="••••" />
+        {errors?.pin && <p className="err">{errors.pin}</p>}
+        <p className="mt-1 text-xs text-muted">
+          Придумайте PIN — с ним вы войдёте с другого телефона или компьютера. Уже участвовали? Введите свой номер и PIN.
+        </p>
+      </div>
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="consent" required defaultChecked={values?.consent === "on"} className="mt-1 size-4 accent-[var(--brand)]" />
         <span>

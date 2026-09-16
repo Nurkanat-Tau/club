@@ -23,6 +23,11 @@ export function RsvpForm({ eventId, known, full }: { eventId: string; known: boo
     <form action={action} className="card space-y-4 p-4">
       <input type="hidden" name="event_id" value={eventId} />
       {!known && <MemberFields errors={state?.errors} values={state?.values} />}
+      {!known && (
+        <p className="text-sm">
+          Уже есть профиль? <a href={`/me?next=/e/${eventId}`} className="underline">Войти по номеру и PIN</a>
+        </p>
+      )}
       {state?.message && !state.ok && <p className="err">{state.message}</p>}
       <SubmitButton>Я приду</SubmitButton>
     </form>

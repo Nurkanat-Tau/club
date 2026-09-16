@@ -47,6 +47,11 @@ create table if not exists members (
   created_at timestamptz not null default now()
 );
 
+-- Members sign in on other devices with phone + PIN.
+alter table members add column if not exists pin_hash text;
+alter table members add column if not exists pin_failures int not null default 0;
+alter table members add column if not exists pin_locked_until timestamptz;
+
 create table if not exists memberships (
   club_id uuid not null references clubs(id) on delete cascade,
   member_id uuid not null references members(id) on delete cascade,

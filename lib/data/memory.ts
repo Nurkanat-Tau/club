@@ -3,7 +3,8 @@ import type { Repo, Snapshot, ClubEvent, Club, Organizer } from "../types";
 import { EmailTakenError } from "../types";
 import { slugify } from "../slug";
 
-type Store = Snapshot & { organizers: (Organizer & { password_hash: string })[] };
+type PinState = { hash: string | null; failures: number; locked_until: string | null };
+type Store = Snapshot & { organizers: (Organizer & { password_hash: string })[]; pins?: Record<string, PinState> };
 const g = globalThis as unknown as { __clubStore?: Store };
 
 export const emptySnapshot = (): Snapshot => ({
@@ -17,7 +18,7 @@ function store(): Store {
 
 /** For tests: start from given data (default: empty). */
 export function resetMemoryStore(data?: Snapshot, organizers: Store["organizers"] = []) {
-  g.__clubStore = { ...(data ? structuredClone(data) : emptySnapshot()), organizers };
+  g.__clubStore = { ...(data ? structuredClone(data) : emptySnapshot()), organizers, pins: {} };
 }
 
 const nowIso = () => new Date().toISOString();
@@ -97,6 +98,37 @@ export function createMemoryRepo(): Repo {
     },
     async getMember(id) {
       return store().members.find((m) => m.id === id) ?? null;
+    },
+    async getMemberAuth(phone) {
+      const s = store();
+      const member = s.members.find((m) => m.phone === phone);
+      if (!member) return null;
+      const pin = s.pins?.[member.id];
+      return { member, pin_hash: pin?.hash ?? null, locked_until: pin?.locked_until ?? null };
+    },
+    async createMember(name, phone, pinHash) {
+      const s = store();
+      if (s.members.some((m) => m.phone === phone)) throw new Error("phone_taken");
+      const m = { id: randomUUID(), name, phone, created_at: nowIso() };
+      s.members.push(m);
+      (s.pins ??= {})[m.id] = { hash: pinHash, failures: 0, locked_until: null };
+      return m;
+    },
+    async setMemberPin(id, pinHash) {
+      (store().pins ??= {})[id] = { hash: pinHash, failures: 0, locked_until: null };
+    },
+    async recordPinFailure(id) {
+      const pins = (store().pins ??= {});
+      const p = (pins[id] ??= { hash: null, failures: 0, locked_until: null });
+      p.failures++;
+      if (p.failures >= 5) {
+        p.failures = 0;
+        p.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      }
+    },
+    async clearPinFailures(id) {
+      const p = store().pins?.[id];
+      if (p) { p.failures = 0; p.locked_until = null; }
     },
 
     async joinClub(clubId, memberId, source) {
@@ -183,8 +215,9 @@ export function createMemoryRepo(): Repo {
       store().logs.push({ ...entry, created_at: nowIso() });
     },
     async snapshot() {
-      const { organizers: _o, ...snap } = store();
+      const { organizers: _o, pins: _p, ...snap } = store();
       void _o;
+      void _p;
       return structuredClone(snap);
     },
   };

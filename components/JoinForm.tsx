@@ -39,6 +39,11 @@ export function JoinForm({ clubSlug, known, isMember, chatHref }: {
       <input type="hidden" name="club_slug" value={clubSlug} />
       <input type="hidden" name="source" value="club_page" />
       {!known && <MemberFields errors={state?.errors} values={state?.values} />}
+      {!known && (
+        <p className="text-sm">
+          Уже есть профиль? <a href={`/me?next=/c/${clubSlug}`} className="underline">Войти по номеру и PIN</a>
+        </p>
+      )}
       {state?.message && !state.ok && <p className="err">{state.message}</p>}
       <SubmitButton>Вступить в клуб</SubmitButton>
     </form>

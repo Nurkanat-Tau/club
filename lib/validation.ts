@@ -18,6 +18,12 @@ export const memberSchema = z.object({
     .transform((v) => normalizeKzPhone(v))
     .refine((v): v is string => v !== null, "Введите казахстанский номер, например +7 701 123 45 67"),
   consent: z.literal("on", { message: "Нужно согласие на обработку данных" }),
+  pin: z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр"),
+});
+
+export const memberLoginSchema = z.object({
+  phone: memberSchema.shape.phone,
+  pin: z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр"),
 });
 
 export const eventSchema = z.object({

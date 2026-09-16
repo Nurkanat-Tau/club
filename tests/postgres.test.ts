@@ -38,6 +38,19 @@ describe.skipIf(!url)("postgres repo", () => {
     const same = await repo.upsertMemberByPhone("Другое имя", "+77011112233");
     expect(same.id).toBe(m.id);
     expect(same.name).toBe("Дана");
+    // PIN sign-in data
+    const created = await repo.createMember("Ерлан", "+77019990011", "pinhash");
+    await expect(repo.createMember("Дубль", "+77019990011", "x")).rejects.toThrow();
+    const auth = await repo.getMemberAuth("+77019990011");
+    expect(auth?.member).toEqual(created);
+    expect(auth?.pin_hash).toBe("pinhash");
+    for (let i = 0; i < 5; i++) await repo.recordPinFailure(created.id);
+    expect((await repo.getMemberAuth("+77019990011"))?.locked_until).not.toBeNull();
+    await repo.clearPinFailures(created.id);
+    expect((await repo.getMemberAuth("+77019990011"))?.locked_until).toBeNull();
+    expect((await repo.getMemberAuth("+77011112233"))?.pin_hash).toBeNull(); // made without PIN
+    expect(Object.keys((await repo.getMember(m.id))!).sort()).toEqual(["created_at", "id", "name", "phone"]);
+
     await repo.joinClub(club.id, m.id, "test");
     await repo.joinClub(club.id, m.id, "test");
     expect(await repo.countMembers(club.id)).toBe(1);

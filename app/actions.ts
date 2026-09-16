@@ -8,27 +8,77 @@ import {
   setCurrentMember, setOrgSession,
 } from "@/lib/session";
 import { tooManyAttempts, tooManyClubs, verifyPassword } from "@/lib/auth";
-import { hashPassword } from "@/lib/password";
+import { checkPassword, hashPassword } from "@/lib/password";
 import { getCategory } from "@/lib/categories";
 import { getCity } from "@/lib/cities";
 import { headers } from "next/headers";
 import {
-  clubSchema, eventSchema, feedbackSchema, formErrors, memberSchema, newClubSchema, pick, type FormState,
+  clubSchema, eventSchema, feedbackSchema, formErrors, memberLoginSchema, memberSchema, newClubSchema, pick, type FormState,
 } from "@/lib/validation";
 import { EmailTakenError, type Member } from "@/lib/types";
 
-/** Resolve the member: the one remembered on this device, or create/find one from the form. */
+type Repo = ReturnType<typeof getRepo>;
+
+/** Check a member's PIN (with lockout). Members without a PIN yet get this one saved. */
+async function checkMemberPin(repo: Repo, auth: NonNullable<Awaited<ReturnType<Repo["getMemberAuth"]>>>, pin: string) {
+  if (auth.locked_until && new Date(auth.locked_until).getTime() > Date.now())
+    return "Слишком много неверных попыток. Попробуйте через 15 минут.";
+  if (!auth.pin_hash) {
+    await repo.setMemberPin(auth.member.id, await hashPassword(pin));
+    return null;
+  }
+  if (await checkPassword(pin, auth.pin_hash)) {
+    await repo.clearPinFailures(auth.member.id);
+    return null;
+  }
+  await repo.recordPinFailure(auth.member.id);
+  return "Неверный PIN для этого номера.";
+}
+
+/** Resolve the member: the one remembered on this device, or sign up / sign in with the form. */
 async function resolveMember(fd: FormData): Promise<{ member?: Member; state?: FormState }> {
   // Honeypot: real people never fill the hidden "website" field.
   if ((fd.get("website") as string | null)?.trim()) return { state: { ok: false, message: "Ошибка отправки" } };
   const current = await getCurrentMember();
   if (current) return { member: current };
-  const raw = pick(fd, ["name", "phone", "consent"]);
+  const raw = pick(fd, ["name", "phone", "consent", "pin"]);
+  const values = { ...raw, pin: "" }; // never echo the PIN back
   const parsed = memberSchema.safeParse(raw);
-  if (!parsed.success) return { state: { ok: false, errors: formErrors(parsed.error), values: raw } };
-  const member = await getRepo().upsertMemberByPhone(parsed.data.name, parsed.data.phone!);
-  await setCurrentMember(member.id);
-  return { member };
+  if (!parsed.success) return { state: { ok: false, errors: formErrors(parsed.error), values } };
+  const repo = getRepo();
+  const phone = parsed.data.phone!;
+  let auth = await repo.getMemberAuth(phone);
+  let member: Member;
+  if (!auth) {
+    try {
+      member = await repo.createMember(parsed.data.name, phone, await hashPassword(parsed.data.pin));
+    } catch {
+      auth = await repo.getMemberAuth(phone); // created at the same moment by another request
+      if (!auth) throw new Error("Could not create member");
+    }
+  }
+  if (auth) {
+    const err = await checkMemberPin(repo, auth, parsed.data.pin);
+    if (err) return { state: { ok: false, errors: { pin: `Этот номер уже зарегистрирован. ${err}` }, values } };
+    member = auth.member;
+  }
+  await setCurrentMember(member!.id);
+  return { member: member! };
+}
+
+export async function memberLoginAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const raw = pick(fd, ["phone", "pin"]);
+  const values = { ...raw, pin: "" };
+  const parsed = memberLoginSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values };
+  const repo = getRepo();
+  const auth = await repo.getMemberAuth(parsed.data.phone!);
+  if (!auth) return { ok: false, errors: { phone: "Номер не найден. Вступите в любой клуб — профиль создастся автоматически." }, values };
+  const err = await checkMemberPin(repo, auth, parsed.data.pin);
+  if (err) return { ok: false, errors: { pin: err }, values };
+  await setCurrentMember(auth.member.id);
+  const next = String(fd.get("next") ?? "");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/me");
 }
 
 export async function joinClubAction(_prev: FormState, fd: FormData): Promise<FormState> {

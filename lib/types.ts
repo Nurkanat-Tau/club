@@ -42,6 +42,12 @@ export type Member = {
   created_at: string;
 };
 
+export type MemberAuth = {
+  member: Member;
+  pin_hash: string | null;
+  locked_until: string | null;
+};
+
 export type Membership = {
   club_id: string;
   member_id: string;
@@ -160,6 +166,13 @@ export interface Repo {
   setEventStatus(id: string, status: ClubEvent["status"]): Promise<void>;
 
   upsertMemberByPhone(name: string, phone: string): Promise<Member>;
+  /** Member + sign-in data for a phone, or null. */
+  getMemberAuth(phone: string): Promise<MemberAuth | null>;
+  createMember(name: string, phone: string, pinHash: string): Promise<Member>;
+  setMemberPin(id: string, pinHash: string): Promise<void>;
+  /** Count a wrong PIN; locks sign-in for 15 minutes after 5 failures. */
+  recordPinFailure(id: string): Promise<void>;
+  clearPinFailures(id: string): Promise<void>;
   getMember(id: string): Promise<Member | null>;
 
   joinClub(clubId: string, memberId: string, source: string | null): Promise<void>;

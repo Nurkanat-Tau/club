@@ -24,7 +24,13 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 - mark who actually came
 - see their members and edit the club page
 
-**Members** browse the city page, join a club and tap "Я приду" on events. They only enter a name and WhatsApp number, with no password; their browser remembers them. They can see "My events" and rate past events.
+**Members** browse the city page, join a club and tap "Я приду" on events. The first time, they enter a name, their WhatsApp number and a 4–6 digit PIN they choose. After that:
+
+- The same device remembers them.
+- On any other phone or computer, they open "Мои встречи" and sign in with their number and PIN, and see the same clubs and events.
+- After 5 wrong PINs, sign-in for that number is locked for 15 minutes.
+
+They can also rate past events.
 
 **Admins** (emails listed in `ADMIN_EMAILS`) sign up by creating a club like anyone else. Then `/admin` shows the experiment dashboard and lets them hide spam clubs.
 
@@ -66,6 +72,7 @@ Every push to `main` redeploys automatically.
 | Hide a spam or inactive club | `/admin` → "Скрыть" |
 | Look at or export raw data | Vercel → Storage → your database → SQL editor / Neon console |
 | Delete a person's data on request | `delete from members where phone = '+77…';` (their memberships, RSVPs and ratings go too) |
+| A member forgot their PIN | `update members set pin_hash = null where phone = '+77…';` Their next sign-up or sign-in sets a new PIN. |
 | Reset an organizer's password | Ask them to create a new account, or update `organizers.password_hash` (scrypt format, see `lib/password.ts`) |
 
 ## 4. For developers
@@ -112,7 +119,9 @@ tests/             unit tests
 - An end-to-end browser run against real Postgres, starting empty:
   - creating a club (including a validation error that keeps what was typed, and a duplicate email being rejected)
   - the organizer's first event
-  - a member joining and signing up for an event
+  - a member joining (with a PIN) and signing up for an event
+  - signing in on a second device: a wrong PIN and an unknown number are rejected, and the right PIN shows the same data
+  - someone else's number with a wrong PIN being blocked, with lockout after 5 tries
   - the organizer seeing that member
   - restarting the server, with all data and logins still there
   - logout and login

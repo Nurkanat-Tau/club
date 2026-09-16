@@ -41,13 +41,13 @@ describe("time (Kazakhstan UTC+5)", () => {
 
 describe("validation", () => {
   it("accepts a valid member", () => {
-    const r = memberSchema.safeParse({ name: "Айгерим", phone: "87011234567", consent: "on" });
+    const r = memberSchema.safeParse({ name: "Айгерим", phone: "87011234567", consent: "on", pin: "1234" });
     expect(r.success && r.data.phone).toBe("+77011234567");
   });
   it("requires consent and a valid phone", () => {
-    const r = memberSchema.safeParse({ name: "A", phone: "123", consent: "" });
+    const r = memberSchema.safeParse({ name: "A", phone: "123", consent: "", pin: "12a" });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.length).toBe(3);
+    if (!r.success) expect(r.error.issues.length).toBe(4);
   });
   it("parses event form", () => {
     const r = eventSchema.safeParse({
@@ -104,6 +104,25 @@ describe("memory repo (empty start)", () => {
     await expect(repo.createClubWithOrganizer("shymkent", newClub, "a@x.kz", "h")).rejects.toBeInstanceOf(EmailTakenError);
     await repo.setClubHidden(a.id, true);
     expect((await repo.listClubs("shymkent")).map((c) => c.id)).toEqual([b.id]);
+  });
+});
+
+describe("member PIN (memory)", () => {
+  beforeEach(() => resetMemoryStore());
+  it("stores PIN and locks after 5 failures", async () => {
+    const repo = createMemoryRepo();
+    const m = await repo.createMember("Дана", "+77011112233", "h1");
+    await expect(repo.createMember("X", "+77011112233", "h2")).rejects.toThrow();
+    expect((await repo.getMemberAuth("+77011112233"))?.pin_hash).toBe("h1");
+    for (let i = 0; i < 4; i++) await repo.recordPinFailure(m.id);
+    expect((await repo.getMemberAuth("+77011112233"))?.locked_until).toBeNull();
+    await repo.recordPinFailure(m.id);
+    expect((await repo.getMemberAuth("+77011112233"))?.locked_until).not.toBeNull();
+    await repo.setMemberPin(m.id, "h3");
+    const a = await repo.getMemberAuth("+77011112233");
+    expect(a?.pin_hash).toBe("h3");
+    expect(a?.locked_until).toBeNull();
+    expect(await repo.getMemberAuth("+77000000000")).toBeNull();
   });
 });
 

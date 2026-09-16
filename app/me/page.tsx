@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getRepo } from "@/lib/data";
 import { getCurrentMember } from "@/lib/session";
 import { Header } from "@/components/Header";
+import { MemberLoginForm } from "@/components/MemberLoginForm";
 import { EventRow } from "@/components/EventRow";
 import { SubmitButton } from "@/components/SubmitButton";
 import { feedbackAction, forgetMeAction } from "@/app/actions";
@@ -11,17 +12,25 @@ import { formatPhone } from "@/lib/phone";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Мои встречи" };
 
-export default async function MePage() {
+export default async function MePage({ searchParams }: PageProps<"/me">) {
+  const n = (await searchParams).next;
+  const next = typeof n === "string" && n.startsWith("/") && !n.startsWith("//") ? n : undefined;
   const member = await getCurrentMember();
   if (!member) {
     return (
       <>
         <Header />
-        <main className="space-y-4 px-4 pt-10 text-center">
-          <p className="text-5xl">👋</p>
-          <h1 className="text-2xl font-bold">Вы пока не записаны</h1>
-          <p className="text-muted">Вступите в клуб или запишитесь на встречу — они появятся здесь.</p>
-          <Link href="/shymkent" className="btn-primary">Смотреть клубы</Link>
+        <main className="space-y-6 px-4 pb-12 pt-8">
+          <section className="space-y-1">
+            <h1 className="text-2xl font-bold">Войти</h1>
+            <p className="text-muted">Уже вступали в клуб на другом устройстве? Введите номер и PIN — всё подтянется.</p>
+          </section>
+          <MemberLoginForm next={next} />
+          <section className="card space-y-2 p-5">
+            <p className="font-semibold">Ещё не участвовали?</p>
+            <p className="text-sm text-muted">Выберите клуб и нажмите «Вступить» — профиль создастся сам.</p>
+            <Link href="/shymkent" className="btn-ghost btn-sm">Смотреть клубы</Link>
+          </section>
         </main>
       </>
     );
@@ -99,6 +108,7 @@ export default async function MePage() {
         </section>
 
         <form action={forgetMeAction} className="pt-4 text-center">
+          <p className="mb-2 text-xs text-muted">На другом устройстве войдите через «Мои встречи» с номером и PIN.</p>
           <SubmitButton className="text-sm text-muted underline">Выйти на этом устройстве</SubmitButton>
         </form>
       </main>

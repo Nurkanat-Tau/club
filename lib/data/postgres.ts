@@ -8,6 +8,7 @@ import { SCHEMA_SQL } from "./schema";
 types.setTypeParser(1184, (v) => new Date(v).toISOString()); // timestamptz
 types.setTypeParser(20, (v) => Number(v)); // int8 / count(*)
 
+const MEMBER_COLS = "id, name, phone, created_at";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID.test(s);
 
@@ -147,14 +148,47 @@ export function createPostgresRepo(connectionString: string): Repo {
     async upsertMemberByPhone(name, phone) {
       // Insert, or return the existing member with this phone (keeps their original name).
       return (await one<Member>(
-        `with ins as (insert into members (name, phone) values ($1, $2) on conflict (phone) do nothing returning *)
-         select * from ins union all select * from members where phone = $2 limit 1`,
+        `with ins as (insert into members (name, phone) values ($1, $2) on conflict (phone) do nothing returning ${MEMBER_COLS})
+         select * from ins union all select ${MEMBER_COLS} from members where phone = $2 limit 1`,
         [name, phone],
       ))!;
     },
     async getMember(id) {
       if (!isUuid(id)) return null;
-      return one<Member>("select * from members where id = $1", [id]);
+      return one<Member>(`select ${MEMBER_COLS} from members where id = $1`, [id]);
+    },
+    async getMemberAuth(phone) {
+      const r = await one<Member & { pin_hash: string | null; pin_locked_until: string | null }>(
+        `select ${MEMBER_COLS}, pin_hash, pin_locked_until from members where phone = $1`,
+        [phone],
+      );
+      if (!r) return null;
+      const { pin_hash, pin_locked_until, ...member } = r;
+      return { member, pin_hash, locked_until: pin_locked_until };
+    },
+    async createMember(name, phone, pinHash) {
+      const r = await one<Member>(
+        `insert into members (name, phone, pin_hash) values ($1,$2,$3)
+         on conflict (phone) do nothing returning ${MEMBER_COLS}`,
+        [name, phone, pinHash],
+      );
+      if (!r) throw new Error("phone_taken");
+      return r;
+    },
+    async setMemberPin(id, pinHash) {
+      await q("update members set pin_hash = $2, pin_failures = 0, pin_locked_until = null where id = $1", [id, pinHash]);
+    },
+    async recordPinFailure(id) {
+      await q(
+        `update members set
+           pin_failures = case when pin_failures + 1 >= 5 then 0 else pin_failures + 1 end,
+           pin_locked_until = case when pin_failures + 1 >= 5 then now() + interval '15 minutes' else pin_locked_until end
+         where id = $1`,
+        [id],
+      );
+    },
+    async clearPinFailures(id) {
+      await q("update members set pin_failures = 0, pin_locked_until = null where id = $1", [id]);
     },
 
     async joinClub(clubId, memberId, source) {
@@ -263,7 +297,7 @@ export function createPostgresRepo(connectionString: string): Repo {
       const [clubs, events, members, memberships, rsvps, feedback, logs] = await Promise.all([
         q<Snapshot["clubs"][number]>("select * from clubs"),
         q<Snapshot["events"][number]>("select * from events"),
-        q<Snapshot["members"][number]>("select * from members"),
+        q<Snapshot["members"][number]>(`select ${MEMBER_COLS} from members`),
         q<Snapshot["memberships"][number]>("select * from memberships"),
         q<Snapshot["rsvps"][number]>("select * from rsvps"),
         q<Snapshot["feedback"][number]>("select * from feedback"),

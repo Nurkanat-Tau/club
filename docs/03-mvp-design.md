@@ -23,7 +23,7 @@ The MVP only needs to answer: **do people join, attend, and come back, and do or
 |---|---|
 | In-app chat, announcements feed | WhatsApp already does this better. Revisit if organizers ask twice |
 | SMS / push notifications | Cost + complexity. Organizer sends WhatsApp reminders with one tap |
-| Passwords / SMS login for members | Friction. Device cookie + phone is enough for a pilot |
+| SMS / WhatsApp one-time codes | Costs money per message. A PIN is enough for a free pilot |
 | Payments | No proof yet that paid events matter. Test by asking (see 01 §11) |
 | Native apps | PWA ("Add to Home Screen") is enough |
 | Kazakh language UI | Russian first for speed. **Add Kazakh in week 2 if feedback asks for it** — easy: strings are few |
@@ -94,8 +94,8 @@ logs (type, visitor_id, member_id, club_id, event_id, created_at)
 
 ## Authentication
 
-- **Members:** no password. After the first join/RSVP we set a signed, httpOnly cookie (1 year). On a new device they type their name + phone again and are matched by phone.
-  - *Known trade-off:* someone who knows your number could RSVP as you. Acceptable for a free pilot; upgrade to WhatsApp/SMS OTP if clubs become paid.
+- **Members:** phone + a 4–6 digit PIN chosen at first join (scrypt-hashed). A signed, httpOnly cookie remembers the device for a year. On another device they sign in on `/me` with phone + PIN. 5 wrong PINs lock that number for 15 minutes (stored in the database, so it works across servers).
+  - *Next step if clubs become paid:* WhatsApp/SMS one-time codes instead of a PIN.
 - **Organizers & admin:** sign up themselves on `/new-club` (email + password, scrypt-hashed in our own table). After login we set our own signed cookie (30 days); every request re-checks the `organizers` table, so removing a row revokes access immediately.
 - **Admins:** anyone whose email is in `ADMIN_EMAILS` (they sign up by creating a club).
 
