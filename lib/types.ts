@@ -159,6 +159,8 @@ export interface Repo {
   /** Creates a club and its organizer account in one step. Throws EmailTakenError if the email is used. */
   createClubWithOrganizer(city: string, club: NewClubInput, email: string, passwordHash: string): Promise<Club>;
   setClubHidden(id: string, hidden: boolean): Promise<void>;
+  /** Account without a club (used for the main admin). Throws EmailTakenError if the email is used. */
+  createOrganizer(email: string, name: string, passwordHash: string, isAdmin: boolean): Promise<void>;
   /** Existing organizer account without a club gets a new club. Returns null if the account already has one. */
   createClubForOrganizer(city: string, club: NewClubInput, email: string): Promise<Club | null>;
   /** Permanently deletes a club with its events, sign-ups and memberships. Its organizer keeps the account. */

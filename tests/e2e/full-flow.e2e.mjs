@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 import { execSync, spawn } from "node:child_process";
 const B = "http://localhost:3200";
 const env = { ...process.env, PORT: "3200", DATABASE_URL: "postgres://tester:pw@localhost:5432/club_test",
-  SESSION_SECRET: "0123456789abcdef0123456789abcdef0123", ADMIN_EMAILS: "boss@club.test" };
+  SESSION_SECRET: "0123456789abcdef0123456789abcdef0123", ADMIN_EMAILS: "boss@club.test, chief@club.test" };
 let server;
 execSync(`psql postgres://tester:pw@localhost:5432/club_test -qc "drop schema public cascade; create schema public;"`);
 const start = async () => {
@@ -166,6 +166,29 @@ try {
   if ((await fetch(B + "/", { redirect: "manual" })).status >= 400) throw new Error("home broken");
   step("robots, sitemap, OG images, icons");
 
+  // main admin without a club
+  const chief = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  chief.on("pageerror", (e) => errors.push(e.message));
+  await chief.goto(B + "/org/login");
+  await chief.getByRole("link", { name: "Создать аккаунт администратора" }).click();
+  await chief.fill("#admin-email", "random@club.test"); await chief.fill("#admin-password", "chief1");
+  await chief.getByRole("button", { name: "Создать аккаунт администратора" }).click();
+  await chief.getByText(/не указана как главная/).waitFor();
+  await chief.fill("#admin-email", "Chief@club.test"); await chief.fill("#admin-password", "chief1");
+  await chief.getByRole("button", { name: "Создать аккаунт администратора" }).click();
+  await chief.waitForURL(B + "/admin");
+  await chief.getByText("По клубам").waitFor();
+  await chief.getByText("Шахматы в кофейне").first().waitFor();
+  await chief.goto(B + "/org/account"); await chief.getByText("Роль: администратор Club").waitFor();
+  await chief.getByRole("button", { name: "Выйти" }).first().click().catch(() => {});
+  const chief2 = await (await browser.newContext()).newPage();
+  await chief2.goto(B + "/org/login");
+  await chief2.fill("#email", "chief@club.test"); await chief2.fill("#password", "chief1");
+  await chief2.getByRole("button", { name: "Войти" }).click();
+  await chief2.waitForURL(B + "/admin");
+  await chief2.goto(B + "/admin/start"); await chief2.waitForURL(B + "/admin");
+  step("main admin registers without a club and logs in to /admin");
+
   // restart server: data must persist
   stop(); await new Promise((r) => setTimeout(r, 1000)); await start();
   step("server restarted");
@@ -303,7 +326,7 @@ try {
   await m.goto(B + "/shymkent");
   await m.getByText("Пока ни одного клуба").waitFor();
   await adm.goto(B + "/admin");
-  await adm.getByRole("link", { name: "Создать клуб" }).waitFor();
+  await adm.getByText("Клубов пока нет").waitFor();
   step("admin deletes all clubs; site empty; admin keeps access");
 } finally {
   await browser.close();

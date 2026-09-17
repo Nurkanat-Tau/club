@@ -46,6 +46,11 @@ export function createMemoryRepo(): Repo {
     async listClubs(city) {
       return store().clubs.filter((c) => c.city === city && !c.hidden);
     },
+    async createOrganizer(email, name, passwordHash, isAdmin) {
+      const s = store();
+      if (s.organizers.some((o) => o.email === email)) throw new EmailTakenError();
+      s.organizers.push({ email, name, club_id: null, password_hash: passwordHash, is_admin: isAdmin, created_at: nowIso() });
+    },
     async createClubWithOrganizer(city, c, email, passwordHash) {
       const s = store();
       if (s.organizers.some((o) => o.email === email)) throw new EmailTakenError();

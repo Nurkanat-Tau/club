@@ -18,7 +18,7 @@ export const limits = {
   /** New member profiles per IP. */
   newMember: async () => getRepo().rateLimited(`new-member:${await clientIp()}`, 15, 60 * 60),
   /** New clubs per IP. */
-  newClub: async () => getRepo().rateLimited(`new-club:${await clientIp()}`, 5, 60 * 60),
+  newClub: async () => getRepo().rateLimited(`new-club:${await clientIp()}`, 10, 60 * 60),
   /** Admin setup code attempts per IP. */
 };
 

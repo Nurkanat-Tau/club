@@ -36,14 +36,14 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 
 There are no PINs or SMS codes. Trade-off: someone who knows a member's number could see which clubs they joined. For a free pilot with no payments this is acceptable; add WhatsApp/SMS codes before anything sensitive is stored.
 
-**Admins** are organizer accounts whose email is in `ADMIN_EMAILS`. They sign up by creating a club like anyone else and then see `/admin`:
+**Admins** (the owner, emails in `ADMIN_EMAILS`) don't need a club. They create their account once at **`/admin/start`** ("Вход для организаторов" → "Создать аккаунт администратора") with their email and a password they make up, then sign in on "Вход для организаторов" like everyone else. `/admin` lets them:
 
 - hide or show any club (hidden clubs return "not found" to the public)
 - edit or delete any club ("Изменить / удалить")
 - see all organizer accounts and give an organizer a temporary password
 - delete **all** clubs at once (two taps)
 
-Member profiles and organizer accounts are kept when clubs are deleted. **Register your admin email right after the first deploy**, so nobody else can take it.
+Member profiles and organizer accounts are kept when clubs are deleted. **Create your admin account at `/admin/start` right after the first deploy**, so nobody else can take it.
 
 ---
 
@@ -74,7 +74,7 @@ Open http://localhost:3000. Without a database the data lives in memory and rese
    - Remove `ALLOW_DEMO` if it's set.
 4. **Redeploy** (Deployments → ⋯ → Redeploy).
 
-The app creates its own tables on the first request. There's no SQL to run by hand. Then open `/new-club` and create your club with your admin email; `/admin` works right away.
+The app creates its own tables on the first request. There's no SQL to run by hand. Then open `/admin/start` and create your admin account with your admin email; `/admin` works right away.
 
 Every push to `main` redeploys automatically.
 

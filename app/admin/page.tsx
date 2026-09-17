@@ -54,7 +54,8 @@ export default async function Admin({ searchParams }: PageProps<"/admin">) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Эксперимент: Шымкент</h1>
         <div className="flex items-center gap-3 text-sm">
-          {s.club_id ? <Link href="/org" className="underline">Мой клуб</Link> : <Link href="/new-club" className="underline">Создать клуб</Link>}
+          {s.club_id && <Link href="/org" className="underline">Мой клуб</Link>}
+          <Link href="/org/account" className="underline">Пароль</Link>
           <form action={logoutAction}><button className="text-muted underline">Выйти</button></form>
         </div>
       </div>

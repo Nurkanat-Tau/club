@@ -149,7 +149,7 @@ Anything else (e.g. "how did you hear about us?") → ask in person and write it
 - Signed httpOnly `SameSite=Lax` cookies, `Secure` in production; `SESSION_SECRET` required in production.
 - Database access is server-only (`server-only` import guard); organizer passwords are scrypt-hashed; club creation is rate-limited and has a honeypot; admins can hide clubs.
 - Server-side validation (zod): phone format, lengths, URLs must be `http(s)` (blocks `javascript:` links).
-- Rate limits stored in the database (work across servers): organizer login 8 / 15 min per email, member sign-in 30 / 15 min per IP, new profiles 15 / hour, new clubs 5 / hour.
+- Rate limits stored in the database (work across servers): organizer login 8 / 15 min per email, member sign-in 30 / 15 min per IP, new profiles 15 / hour, new clubs 10 / hour.
 - Seat booking is atomic (`select … for update`), so two people can't take the last place.
 - Deleting anything (event, club, all clubs, own profile) takes two taps: the button, then «Да, …».
 - Honeypot field against simple bots.

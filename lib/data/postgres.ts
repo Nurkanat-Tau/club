@@ -88,6 +88,13 @@ export function createPostgresRepo(connectionString: string): Repo {
         return club;
       });
     },
+    async createOrganizer(email, name, passwordHash, isAdmin) {
+      const r = await q(
+        "insert into organizers (email, name, club_id, password_hash, is_admin) values ($1,$2,null,$3,$4) on conflict (email) do nothing returning email",
+        [email, name, passwordHash, isAdmin],
+      );
+      if (!r.length) throw new EmailTakenError();
+    },
     async createClubForOrganizer(city, c, email) {
       return tx(async (db) => {
         const o = await db.query("select club_id from organizers where email = $1 for update", [email]);

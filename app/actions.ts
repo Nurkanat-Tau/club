@@ -407,6 +407,26 @@ export async function addWalkInAction(_prev: FormState, fd: FormData): Promise<F
 
 // ======================= Admin =======================
 
+/** The main admin (email in ADMIN_EMAILS) creates an account without a club. */
+export async function adminSignupAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const raw = pick(fd, ["email", "password"]);
+  const values = { email: raw.email };
+  const parsed = accountSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values };
+  const { email, password } = parsed.data;
+  if (!isAdminEmail(email))
+    return { ok: false, errors: { email: "Эта почта не указана как главная. Организаторы клубов регистрируются через «Создать клуб»." }, values };
+  if (await limits.login(email)) return { ok: false, message: TOO_MANY, values };
+  try {
+    await getRepo().createOrganizer(email, "", await hashPassword(password), true);
+  } catch (e) {
+    if (!(e instanceof EmailTakenError)) throw e;
+    return { ok: false, errors: { email: "Аккаунт с этой почтой уже есть — войдите на странице «Вход для организаторов»." }, values };
+  }
+  await setOrgSession(email);
+  redirect("/admin");
+}
+
 export async function deleteAllClubsAction() {
   await requireAdmin();
   const n = await getRepo().deleteAllClubs();

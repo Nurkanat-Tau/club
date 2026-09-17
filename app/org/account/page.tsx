@@ -21,7 +21,7 @@ export default async function Account() {
           <p><span className="text-muted">Email:</span> <b className="break-all">{s.email}</b></p>
           <p><span className="text-muted">Имя:</span> {s.name || "—"}</p>
           <p><span className="text-muted">Роль:</span> {s.isAdmin ? "администратор Club" : "организатор"}</p>
-          {!club && <Link href="/new-club" className="btn-primary btn-sm mt-2">Создать клуб</Link>}
+          {!club && !s.isAdmin && <Link href="/new-club" className="btn-primary btn-sm mt-2">Создать клуб</Link>}
         </section>
         <PasswordForm />
         <p className="text-sm text-muted">

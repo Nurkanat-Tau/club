@@ -19,6 +19,9 @@ export default async function LoginPage() {
       </div>
       <LoginForm />
       <p className="text-sm text-muted">
+        Главный администратор без клуба? <Link href="/admin/start" className="underline">Создать аккаунт администратора</Link>
+      </p>
+      <p className="text-sm text-muted">
         Забыли пароль? Напишите администратору Club — он выдаст временный пароль, который потом можно сменить в разделе «Аккаунт».
       </p>
     </main>
