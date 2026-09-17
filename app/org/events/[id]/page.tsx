@@ -147,17 +147,10 @@ export default async function ManageEvent({ params, searchParams }: PageProps<"/
               <ConfirmButton label="Отменить встречу" confirmLabel="Да, отменить" className="text-sm text-bad underline" />
             )}
           </form>
-          <details>
-            <summary className="cursor-pointer text-sm text-bad underline">Удалить встречу</summary>
-            <form action={deleteEventAction} className="mt-2 space-y-2 text-sm">
-              <input type="hidden" name="event_id" value={event.id} />
-              <label className="flex items-start gap-2">
-                <input type="checkbox" name="confirm" required className="mt-1" />
-                <span>Удалить навсегда вместе с записями и оценками. Если люди уже записаны, лучше «Отменить».</span>
-              </label>
-              <SubmitButton className="btn btn-sm bg-bad text-white">Удалить</SubmitButton>
-            </form>
-          </details>
+          <form action={deleteEventAction}>
+            <input type="hidden" name="event_id" value={event.id} />
+            <ConfirmButton label="Удалить встречу" confirmLabel="Да, удалить" className="text-sm text-bad underline" />
+          </form>
         </section>
       </main>
     </>

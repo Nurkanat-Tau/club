@@ -1,10 +1,10 @@
 // End-to-end run against a real, throwaway Postgres (it is WIPED). Needs `npm run build` and playwright.
-// TEST_DATABASE_URL is hardcoded below — change it for your machine. Run: node tests/e2e/full-flow.e2e.mjs
+// The database URL is hardcoded below — change it for your machine. Run: node tests/e2e/full-flow.e2e.mjs
 import { chromium } from "playwright";
 import { execSync, spawn } from "node:child_process";
 const B = "http://localhost:3200";
 const env = { ...process.env, PORT: "3200", DATABASE_URL: "postgres://tester:pw@localhost:5432/club_test",
-  SESSION_SECRET: "0123456789abcdef0123456789abcdef0123", ADMIN_EMAILS: "boss@club.test", ADMIN_SETUP_CODE: "test-setup-code-123" };
+  SESSION_SECRET: "0123456789abcdef0123456789abcdef0123", ADMIN_EMAILS: "boss@club.test" };
 let server;
 execSync(`psql postgres://tester:pw@localhost:5432/club_test -qc "drop schema public cascade; create schema public;"`);
 const start = async () => {
@@ -29,18 +29,20 @@ try {
   await org.waitForURL(/new-club/);
   await org.fill("#name", "Шахматы в кофейне");
   await org.selectOption("#category", "chess");
-  await org.fill("#description", "коротко");
+  if (await org.locator("#description").isVisible()) throw new Error("optional fields should start collapsed");
   await org.fill("#schedule_text", "Каждое воскресенье в 16:00");
   await org.fill("#meeting_point", "Антикафе на Тауке хана");
-  await org.fill("#organizer_name", "Ерлан");
   await org.fill("#email", "Erlan@Club.test");
-  await org.fill("#password", "supersecret1");
+  await org.fill("#password", "123");
+  await org.evaluate(() => document.querySelectorAll("input[minlength]").forEach((i) => i.removeAttribute("minlength")));
   await org.getByRole("button", { name: "Создать клуб" }).click();
-  await org.getByText(/минимум 20 символов/).waitFor();
+  await org.getByText(/минимум 6 символов/).waitFor();
   if ((await org.inputValue("#name")) !== "Шахматы в кофейне") throw new Error("form not refilled");
-  step("club validation keeps input");
+  step("short sign-up form; errors keep input");
+  await org.getByText("Ещё о клубе").click();
   await org.fill("#description", "Быстрые партии и дружеские турниры для взрослых любителей.");
-  await org.fill("#password", "supersecret1");
+  await org.fill("#organizer_name", "Ерлан");
+  await org.fill("#password", "secret1");
   await org.fill("#chat_link", "https://chat.whatsapp.com/abc");
   await org.getByRole("button", { name: "Создать клуб" }).click();
   await org.waitForURL(/\/org\?welcome=1/, { timeout: 8000 }).catch(async (e) => { await org.screenshot({ path: "/tmp/dbg.png", fullPage: true }); console.log("cat=", await org.inputValue("#category"), "err=", await org.locator(".err").allTextContents()); throw e; });
@@ -74,12 +76,10 @@ try {
   const dup = await (await browser.newContext()).newPage();
   await dup.goto(B + "/new-club");
   await dup.fill("#name", "Другой клуб"); await dup.selectOption("#category", "books");
-  await dup.fill("#description", "Читаем и обсуждаем книги раз в неделю, все welcome.");
   await dup.fill("#schedule_text", "пт 19:00"); await dup.fill("#meeting_point", "библиотека");
-  await dup.fill("#organizer_name", "X"); await dup.fill("#organizer_name", "Хан");
   await dup.fill("#email", "erlan@club.test"); await dup.fill("#password", "anotherpass");
   await dup.getByRole("button", { name: "Создать клуб" }).click();
-  await dup.getByText(/уже зарегистрирован/).waitFor();
+  await dup.getByText(/уже зарегистрирован — введите свой пароль/).waitFor();
   step("duplicate email rejected");
 
   // member
@@ -89,11 +89,10 @@ try {
   await m.getByText("Воскресный блиц").waitFor();
   await m.locator('a[href="/c/shahmaty-v-kofeyne"]').click();
   await m.getByRole("button", { name: "Вступить в клуб" }).click();
-  await m.fill("#name", "Дана"); await m.fill("#phone", "87012223344"); await m.check('input[name="consent"]');
-  await m.fill("#pin", "12");
+  await m.fill("#phone", "87012223344");
   await m.getByRole("button", { name: "Вступить в клуб" }).click();
-  if (await m.locator("#pin").evaluate((el) => el.validity.valid)) throw new Error("short PIN accepted by browser");
-  await m.fill("#pin", "4821");
+  await m.getByText("Как вас зовут?").waitFor();
+  await m.fill("#name", "Дана");
   await m.getByRole("button", { name: "Вступить в клуб" }).click();
   await m.getByText("Вы участник клуба").waitFor();
   await m.goto(evUrl);
@@ -116,45 +115,24 @@ try {
   d2.on("pageerror", (e) => errors.push(e.message));
   await d2.goto(B + "/me");
   await d2.getByRole("heading", { name: "Войти" }).waitFor();
-  await d2.fill("#login-phone", "+7 701 222 33 44"); await d2.fill("#login-pin", "0000");
+  await d2.fill("#login-phone", "+7 700 000 00 00");
   await d2.getByRole("button", { name: "Войти" }).click();
-  await d2.getByText(/Неверный номер или PIN/).waitFor();
-  await d2.waitForFunction(() => document.querySelector("#login-pin")?.value === "");
-  await d2.fill("#login-phone", "+7 700 000 00 00"); await d2.fill("#login-pin", "4821");
+  await d2.getByText(/Такого номера ещё нет/).waitFor();
+  await d2.fill("#login-phone", "+7 701 222 33 44");
   await d2.getByRole("button", { name: "Войти" }).click();
-  await d2.getByText(/Неверный номер или PIN/).waitFor();
-  await d2.waitForFunction(() => document.querySelector("#login-pin")?.value === "");
-  await d2.fill("#login-phone", "+7 701 222 33 44"); await d2.fill("#login-pin", "4821");
-  await d2.getByRole("button", { name: "Войти" }).click();
-  await d2.getByText("Воскресный блиц").waitFor().catch(async (e) => { await d2.screenshot({ path: "/tmp/dbg.png", fullPage: true }); console.log(d2.url()); throw e; });
+  await d2.getByText("Воскресный блиц").waitFor();
   await d2.getByText("Шахматы в кофейне").first().waitFor();
-  await d2.screenshot({ path: "/tmp/n4-device2.png", fullPage: true });
-  step("second device: wrong PIN rejected, unknown phone rejected, correct PIN shows same events + clubs");
+  step("second device: just the phone number shows the same events + clubs");
 
-  // third device: someone types Dana's phone in the join form with a wrong PIN
+  // third device: known phone in the RSVP form signs in without a new profile
   const d3 = await (await browser.newContext()).newPage();
   await d3.goto(evUrl);
   await d3.getByRole("button", { name: "Я приду" }).click();
-  await d3.fill("#name", "Самозванец"); await d3.fill("#phone", "87012223344"); await d3.fill("#pin", "1111");
-  await d3.check('input[name="consent"]');
+  await d3.fill("#phone", "87012223344");
   await d3.getByRole("button", { name: "Я приду" }).click();
-  await d3.getByText(/уже есть в Club, но PIN не подходит/).waitFor();
-  // lockout after repeated failures
-  for (let i = 0; i < 5; i++) {
-    await d3.fill("#pin", "1111"); await d3.check('input[name="consent"]');
-    await d3.getByRole("button", { name: "Я приду" }).click();
-    await d3.waitForTimeout(400);
-  }
-  await d3.getByText(/Слишком много попыток/).waitFor();
-  step("impersonation blocked + lockout after 5 wrong PINs");
-
-  // "log in" link on event page returns to the event
-  const d4 = await (await browser.newContext()).newPage();
-  await d4.goto(evUrl);
-  await d4.getByRole("button", { name: "Я приду" }).click();
-  await d4.getByRole("link", { name: "Войти по номеру и PIN" }).click();
-  await d4.waitForURL(/\/me\?next=/);
-  step("login link from event page");
+  await d3.getByText(/Вы записаны/).first().waitFor();
+  await d3.getByText("Идут: 1").first().waitFor();
+  step("same phone on another device = same person (no duplicate)");
 
   // organizer: walk-in + cancel-with-confirm on a second event
   await org.goto(B + "/org/events/new");
@@ -169,7 +147,12 @@ try {
   await org.getByText(/отменена/i).first().waitFor();
   await m.goto(ev2.replace("/org/events/", "/e/"));
   await m.getByText(/отменена/i).first().waitFor();
-  step("cancel needs confirmation; members see the cancelled notice");
+  await org.goto(ev2);
+  await org.getByRole("button", { name: "Удалить встречу" }).click();
+  await org.getByRole("button", { name: "Да, удалить" }).click();
+  await org.waitForURL(B + "/org");
+  if ((await m.goto(ev2.replace("/org/events/", "/e/"))).status() !== 404) throw new Error("deleted event still there");
+  step("cancel + delete event in two taps; members see the cancelled notice");
 
   // SEO / sharing
   const robots = await (await fetch(B + "/robots.txt")).text();
@@ -198,7 +181,7 @@ try {
   await org.fill("#email", "erlan@club.test"); await org.fill("#password", "wrongpass");
   await org.getByRole("button", { name: "Войти" }).click();
   await org.getByText("Неверный email или пароль").waitFor();
-  await org.fill("#password", "supersecret1");
+  await org.fill("#password", "secret1");
   await org.getByRole("button", { name: "Войти" }).click();
   await org.waitForURL(B + "/org");
   step("login with stored password");
@@ -210,26 +193,13 @@ try {
   adm.on("pageerror", (e) => errors.push(e.message));
   await adm.goto(B + "/new-club");
   await adm.fill("#name", "English Speaking Club"); await adm.selectOption("#category", "english");
-  await adm.fill("#description", "Живая практика английского каждую неделю для всех уровней.");
   await adm.fill("#schedule_text", "чт 19:00"); await adm.fill("#meeting_point", "кофейня");
-  await adm.fill("#organizer_name", "Нурканат"); await adm.fill("#email", "boss@club.test"); await adm.fill("#password", "adminpass1");
+  await adm.fill("#email", "boss@club.test"); await adm.fill("#password", "adminpass1");
   await adm.getByRole("button", { name: "Создать клуб" }).click();
   await adm.waitForURL(/\/org/);
-  await adm.goto(B + "/admin"); await adm.waitForURL(B + "/org");
-  await adm.goto(B + "/org/account");
-  await adm.getByRole("link", { name: "Активировать права администратора" }).click();
-  await adm.fill("#admin-code", "wrong-code-000");
-  await adm.getByRole("button", { name: "Активировать" }).click();
-  await adm.getByText("Неверный код").waitFor();
-  await adm.fill("#admin-code", "test-setup-code-123");
-  await adm.getByRole("button", { name: "Активировать" }).click();
-  await adm.waitForURL(B + "/admin");
-  step("admin rights need the setup code");
-  await org.goto(B + "/admin/claim");
-  await org.fill("#admin-code", "test-setup-code-123");
-  await org.getByRole("button", { name: "Активировать" }).click();
-  await org.getByText("Этот аккаунт не может стать администратором.").waitFor();
-  step("email not in ADMIN_EMAILS cannot claim even with the code");
+  await adm.goto(B + "/admin");
+  await adm.getByText("По клубам").waitFor();
+  step("admin email is admin automatically");
   await adm.goto(B + "/admin");
   await adm.getByText("По клубам").waitFor();
   await adm.screenshot({ path: "/tmp/n3-admin.png", fullPage: true });
@@ -265,12 +235,10 @@ try {
 
   // ---- organizer deletes own club ----
   await org.goto(B + "/org/club");
-  await org.getByText("Удалить клуб").click();
-  await org.fill("#confirm-delete", "не то название");
-  await org.getByRole("button", { name: "Удалить навсегда" }).click();
-  await org.getByText("Название не совпадает").waitFor();
-  await org.fill("#confirm-delete", "шахматный клуб шымкента");
-  await org.getByRole("button", { name: "Удалить навсегда" }).click();
+  await org.getByRole("button", { name: "Удалить клуб" }).click();
+  await org.getByRole("button", { name: "Отмена" }).click();
+  await org.getByRole("button", { name: "Удалить клуб" }).click();
+  await org.getByRole("button", { name: "Да, удалить клуб" }).click();
   await org.waitForURL(/new-club\?deleted=1/);
   await org.getByText("Клуб удалён.").waitFor();
   if (await org.locator("#email").count()) throw new Error("account fields shown to signed-in organizer");
@@ -280,23 +248,22 @@ try {
   if (gone.status() !== 404) throw new Error("deleted event still reachable: " + gone.status());
   await m.goto(B + "/me");
   if (await m.getByText("Воскресный блиц").count()) throw new Error("deleted event still in member list");
-  step("organizer deletes own club (wrong confirmation rejected); club, events, sign-ups gone");
+  step("organizer deletes own club in two taps; club, events, sign-ups gone");
 
   // same organizer on another device: no club -> sent to /new-club; can sign up again with email+password
   const org2 = await (await browser.newContext()).newPage();
   await org2.goto(B + "/org/login");
-  await org2.fill("#email", "erlan@club.test"); await org2.fill("#password", "supersecret1");
+  await org2.fill("#email", "erlan@club.test"); await org2.fill("#password", "secret1");
   await org2.getByRole("button", { name: "Войти" }).click();
   await org2.waitForURL(/new-club/);
   const anon = await (await browser.newContext()).newPage();
   await anon.goto(B + "/new-club");
   await anon.fill("#name", "Блиц-клуб"); await anon.selectOption("#category", "chess");
-  await anon.fill("#description", "Возвращаемся с новым форматом блица по пятницам.");
   await anon.fill("#schedule_text", "пт 19:00"); await anon.fill("#meeting_point", "антикафе");
-  await anon.fill("#organizer_name", "Ерлан"); await anon.fill("#email", "erlan@club.test"); await anon.fill("#password", "wrongpassword");
+  await anon.fill("#email", "erlan@club.test"); await anon.fill("#password", "wrongpassword");
   await anon.getByRole("button", { name: "Создать клуб" }).click();
-  await anon.getByText(/уже зарегистрирован/).waitFor();
-  await anon.fill("#password", "supersecret1");
+  await anon.getByText(/уже зарегистрирован — введите свой пароль/).waitFor();
+  await anon.fill("#password", "secret1");
   await anon.getByRole("button", { name: "Создать клуб" }).click();
   await anon.waitForURL(/\/org\?welcome=1/);
   step("organizer without a club can start a new one (needs correct password)");
@@ -305,9 +272,8 @@ try {
   await adm.goto(B + "/admin");
   await adm.locator("li", { hasText: "Блиц-клуб" }).getByRole("link", { name: "Изменить / удалить" }).click();
   await adm.waitForURL(/org\/club\?club=/);
-  await adm.getByText("Удалить клуб").click();
-  await adm.fill("#confirm-delete", "Блиц-клуб");
-  await adm.getByRole("button", { name: "Удалить навсегда" }).click();
+  await adm.getByRole("button", { name: "Удалить клуб" }).click();
+  await adm.getByRole("button", { name: "Да, удалить клуб" }).click();
   await adm.waitForURL(/admin\?deleted=1/);
   if (await adm.locator("li", { hasText: "Блиц-клуб" }).count()) throw new Error("admin delete failed");
   step("admin deletes another organizer's club");
@@ -322,24 +288,17 @@ try {
   await org3.fill("#email", "erlan@club.test"); await org3.fill("#password", temp);
   await org3.getByRole("button", { name: "Войти" }).click();
   await org3.waitForURL(/\/org|new-club/);
-  await adm.fill("#rpin-phone", "87012223344");
-  await adm.getByRole("button", { name: "Выдать новый PIN" }).click();
-  const pin = (await adm.getByText(/Новый PIN/).textContent()).match(/: (\d{6})/)[1];
-  const d5 = await (await browser.newContext()).newPage();
-  await d5.goto(B + "/me");
-  await d5.fill("#login-phone", "87012223344"); await d5.fill("#login-pin", pin);
-  await d5.getByRole("button", { name: "Войти" }).click();
-  await d5.getByText("Мои клубы").or(d5.getByText("Мои встречи")).first().waitFor();
+  // member deletes own profile in two taps
+  await m.goto(B + "/me");
+  await m.getByRole("button", { name: "Удалить мой профиль" }).click();
+  await m.getByRole("button", { name: "Да, удалить всё" }).click();
+  await m.getByText("Ваш профиль и все данные удалены.").waitFor();
   await adm.screenshot({ path: "/tmp/f-admin.png", fullPage: true });
-  step("admin reset password + PIN; both work");
+  step("admin password reset works; member deleted own profile");
 
   // ---- admin deletes all ----
-  await adm.getByText(/Удалить все клубы/).first().click();
-  await adm.fill("#confirm-all", "да");
-  await adm.getByRole("button", { name: "Удалить все клубы" }).click();
-  await adm.getByText("Введите «УДАЛИТЬ ВСЁ»").waitFor();
-  await adm.fill("#confirm-all", "удалить всё");
-  await adm.getByRole("button", { name: "Удалить все клубы" }).click();
+  await adm.getByRole("button", { name: /Удалить все клубы/ }).click();
+  await adm.getByRole("button", { name: "Да, удалить все" }).click();
   await adm.getByText("Все клубы удалены (1).").waitFor();
   await m.goto(B + "/shymkent");
   await m.getByText("Пока ни одного клуба").waitFor();

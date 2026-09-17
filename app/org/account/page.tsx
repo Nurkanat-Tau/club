@@ -27,11 +27,6 @@ export default async function Account() {
         <p className="text-sm text-muted">
           Забыли пароль? Администратор Club может выдать временный. Сменить email пока нельзя — напишите администратору.
         </p>
-        {!s.isAdmin && (
-          <p className="text-xs text-muted">
-            Вы владелец Club? <Link href="/admin/claim" className="underline">Активировать права администратора</Link>
-          </p>
-        )}
       </main>
     </>
   );

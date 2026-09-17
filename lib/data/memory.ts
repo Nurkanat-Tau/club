@@ -141,6 +141,15 @@ export function createMemoryRepo(): Repo {
       const pin = s.pins?.[member.id];
       return { member, pin_hash: pin?.hash ?? null, locked_until: pin?.locked_until ?? null };
     },
+    async deleteMember(id) {
+      const s = store();
+      s.members = s.members.filter((m) => m.id !== id);
+      s.memberships = s.memberships.filter((m) => m.member_id !== id);
+      s.rsvps = s.rsvps.filter((r) => r.member_id !== id);
+      s.feedback = s.feedback.filter((f) => f.member_id !== id);
+      for (const l of s.logs) if (l.member_id === id) l.member_id = null;
+      if (s.pins) delete s.pins[id];
+    },
     async createMember(name, phone, pinHash) {
       const s = store();
       if (s.members.some((m) => m.phone === phone)) throw new Error("phone_taken");

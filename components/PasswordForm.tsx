@@ -15,8 +15,8 @@ export function PasswordForm() {
         {e.current && <p className="err">{e.current}</p>}
       </div>
       <div>
-        <label className="label" htmlFor="pw-next">Новый пароль (минимум 8 символов)</label>
-        <input id="pw-next" name="next" type="password" autoComplete="new-password" minLength={8} required className="input" />
+        <label className="label" htmlFor="pw-next">Новый пароль (минимум 6 символов)</label>
+        <input id="pw-next" name="next" type="password" autoComplete="new-password" minLength={6} required className="input" />
         {e.next && <p className="err">{e.next}</p>}
       </div>
       {state?.message && <p className={state.ok ? "text-sm font-semibold text-ok" : "err"}>{state.message}</p>}

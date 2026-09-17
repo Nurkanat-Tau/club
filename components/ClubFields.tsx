@@ -7,11 +7,15 @@ const MAX: Record<string, number> = {
 };
 
 /** Club fields shared by "create club" and "edit club". `formKey` remounts the <select> after a failed submit. */
-export function ClubFields({ values, errors, formKey = 0 }: {
+export function ClubFields({ values, errors, formKey = 0, compact = false }: {
   values: Record<string, string | null | undefined>;
   errors: Record<string, string>;
   formKey?: number;
+  /** New-club form: optional fields start collapsed. */
+  compact?: boolean;
 }) {
+  const OPTIONAL = ["description", "chat_link", "instagram", "organizer_name", "organizer_bio"];
+  const openExtras = !compact || OPTIONAL.some((k) => values[k] || errors[k]);
   const field = (name: string, label: string, opts: { area?: boolean; placeholder?: string; hint?: string; type?: string; required?: boolean; auto?: string } = {}) => (
     <div>
       <label className="label" htmlFor={name}>{label}</label>
@@ -39,17 +43,19 @@ export function ClubFields({ values, errors, formKey = 0 }: {
           </select>
           {errors.category && <p className="err">{errors.category}</p>}
         </div>
-        {field("description", "О клубе", { area: true, required: true, placeholder: "Что вы делаете, для кого, какой уровень, чего ждать новичку" })}
         {field("schedule_text", "Когда встречаетесь", { required: true, placeholder: "Каждую субботу в 08:00" })}
         {field("meeting_point", "Где встречаетесь", { required: true, placeholder: "Дендропарк, центральный вход" })}
-        {field("chat_link", "Ссылка на чат WhatsApp / Telegram (необязательно)", { type: "url", placeholder: "https://chat.whatsapp.com/…", hint: "Участники увидят её после вступления" })}
-        {field("instagram", "Instagram клуба (необязательно)", { placeholder: "shymkent.run" })}
       </fieldset>
-      <fieldset className="card space-y-4 p-5">
-        <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted">Организатор</legend>
-        {field("organizer_name", "Имя организатора", { required: true, auto: "name" })}
-        {field("organizer_bio", "Пара слов об организаторе (необязательно)", { area: true, placeholder: "Бегаю 5 лет, тренер-любитель" })}
-      </fieldset>
+      <details className="card p-5" open={openExtras}>
+        <summary className="cursor-pointer font-semibold">Ещё о клубе <span className="font-normal text-muted">(необязательно, можно позже)</span></summary>
+        <div className="mt-4 space-y-4">
+          {field("description", "О клубе", { area: true, placeholder: "Что вы делаете, для кого, чего ждать новичку" })}
+          {field("chat_link", "Ссылка на чат WhatsApp / Telegram", { type: "url", placeholder: "https://chat.whatsapp.com/…", hint: "Участники увидят её после вступления" })}
+          {field("instagram", "Instagram клуба", { placeholder: "shymkent.run" })}
+          {field("organizer_name", "Ваше имя", { auto: "name" })}
+          {field("organizer_bio", "Пара слов о вас", { area: true, placeholder: "Бегаю 5 лет, тренер-любитель" })}
+        </div>
+      </details>
     </>
   );
 }

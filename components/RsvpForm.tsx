@@ -27,14 +27,10 @@ export function RsvpForm({ eventId, known, full }: { eventId: string; known: boo
   return (
     <form action={action} className="card space-y-4 p-4">
       <input type="hidden" name="event_id" value={eventId} />
+      {!known && <p className="text-sm text-muted">Уже участвовали? Просто введите тот же номер.</p>}
       {!known && <MemberFields errors={state?.errors} values={state?.values} />}
       {state?.message && !state.ok && <p className="err">{state.message}</p>}
       <SubmitButton>Я приду</SubmitButton>
-      {!known && (
-        <p className="text-center text-sm">
-          <a href={`/me?next=/e/${eventId}`} className="underline">Войти по номеру и PIN</a>
-        </p>
-      )}
     </form>
   );
 }

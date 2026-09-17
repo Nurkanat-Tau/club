@@ -1,16 +1,16 @@
 "use server";
 
-import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 import { getRepo } from "@/lib/data";
 import {
-  clearCurrentMember, clearOrgSession, getCurrentMember, getOrgSession, getVisitorId, mayClaimAdmin,
+  clearCurrentMember, clearOrgSession, getCurrentMember, getOrgSession, getVisitorId, isAdminEmail,
   setCurrentMember, setOrgSession,
 } from "@/lib/session";
 import { limits, verifyPassword } from "@/lib/auth";
-import { checkPassword, hashPassword } from "@/lib/password";
+import { hashPassword } from "@/lib/password";
 import { getCategory } from "@/lib/categories";
 import { getCity } from "@/lib/cities";
 import { normalizePhone } from "@/lib/phone";
@@ -21,7 +21,6 @@ import {
 } from "@/lib/validation";
 import { EmailTakenError, type Club, type Member } from "@/lib/types";
 
-type Repo = ReturnType<typeof getRepo>;
 const TOO_MANY = "Слишком много попыток. Попробуйте через 15 минут.";
 
 /** Public visitors can't use hidden clubs; their organizer and admins still can. */
@@ -34,75 +33,40 @@ async function visibleClub(club: Club | null): Promise<Club | null> {
 
 // ======================= Members =======================
 
-/** Check a member's PIN (with lockout). Members without a PIN yet get this one saved. */
-async function checkMemberPin(repo: Repo, auth: NonNullable<Awaited<ReturnType<Repo["getMemberAuth"]>>>, pin: string) {
-  if (auth.locked_until && new Date(auth.locked_until).getTime() > Date.now()) return TOO_MANY;
-  if (!auth.pin_hash) {
-    await repo.setMemberPin(auth.member.id, await hashPassword(pin));
-    return null;
-  }
-  if (await checkPassword(pin, auth.pin_hash)) {
-    await repo.clearPinFailures(auth.member.id);
-    return null;
-  }
-  await repo.recordPinFailure(auth.member.id);
-  return "wrong";
-}
-
-/** The member remembered on this device, or sign up / sign in with the form. */
+/** The member remembered on this device, or sign up / sign in with name + phone. */
 async function resolveMember(fd: FormData): Promise<{ member?: Member; state?: FormState }> {
   if ((fd.get("website") as string | null)?.trim()) return { state: { ok: false, message: "Ошибка отправки" } };
   const current = await getCurrentMember();
   if (current) return { member: current };
-  const raw = pick(fd, ["name", "phone", "consent", "pin"]);
-  const values = { ...raw, pin: "" }; // never echo the PIN back
-  const parsed = memberSchema.safeParse(raw);
+  const values = pick(fd, ["name", "phone"]);
+  const parsed = memberSchema.safeParse(values);
   if (!parsed.success) return { state: { ok: false, errors: formErrors(parsed.error), values } };
   if (await limits.memberAuth()) return { state: { ok: false, message: TOO_MANY, values } };
   const repo = getRepo();
   const phone = parsed.data.phone!;
-  let auth = await repo.getMemberAuth(phone);
-  let member: Member | undefined;
-  if (!auth) {
-    if (parsed.data.name.length < 2)
-      return { state: { ok: false, errors: { name: "Вы здесь впервые — укажите имя" }, values } };
+  let member = await repo.findMemberByPhone(phone);
+  if (!member) {
+    if (parsed.data.name.length < 2) return { state: { ok: false, errors: { name: "Как вас зовут?" }, values } };
     if (await limits.newMember()) return { state: { ok: false, message: "Слишком много новых профилей. Попробуйте позже.", values } };
     try {
-      member = await repo.createMember(parsed.data.name, phone, await hashPassword(parsed.data.pin));
+      member = await repo.createMember(parsed.data.name, phone, "");
     } catch {
-      auth = await repo.getMemberAuth(phone); // created at the same moment by another request
-      if (!auth) throw new Error("Could not create member");
+      member = await repo.findMemberByPhone(phone); // created at the same moment by another request
+      if (!member) throw new Error("Could not create member");
     }
   }
-  if (auth) {
-    const err = await checkMemberPin(repo, auth, parsed.data.pin);
-    if (err === "wrong")
-      return { state: { ok: false, errors: { pin: "Этот номер уже есть в Club, но PIN не подходит. Введите свой PIN." }, values } };
-    if (err) return { state: { ok: false, message: err, values } };
-    member = auth.member;
-  }
-  await setCurrentMember(member!.id);
-  return { member: member! };
+  await setCurrentMember(member.id);
+  return { member };
 }
 
 export async function memberLoginAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const raw = pick(fd, ["phone", "pin"]);
-  const values = { ...raw, pin: "" };
-  const parsed = memberLoginSchema.safeParse(raw);
+  const values = pick(fd, ["phone"]);
+  const parsed = memberLoginSchema.safeParse(values);
   if (!parsed.success) return { ok: false, errors: formErrors(parsed.error), values };
   if (await limits.memberAuth()) return { ok: false, message: TOO_MANY, values };
-  const repo = getRepo();
-  const auth = await repo.getMemberAuth(parsed.data.phone!);
-  // Same answer for "unknown number" and "wrong PIN", so the form can't be used to check who is registered.
-  const generic = { ok: false, message: "Неверный номер или PIN. Ещё не участвовали? Вступите в клуб — профиль создастся сам.", values };
-  if (!auth || !auth.pin_hash) {
-    await hashPassword(parsed.data.pin); // same timing as a real check
-    return generic;
-  }
-  const err = await checkMemberPin(repo, auth, parsed.data.pin);
-  if (err === "wrong") return generic;
-  if (err) return { ok: false, message: err, values };
-  await setCurrentMember(auth.member.id);
+  const member = await getRepo().findMemberByPhone(parsed.data.phone!);
+  if (!member) return { ok: false, message: "Такого номера ещё нет. Выберите клуб и нажмите «Вступить» — это займёт 10 секунд.", values };
+  await setCurrentMember(member.id);
   const next = String(fd.get("next") ?? "");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/me");
 }
@@ -169,21 +133,11 @@ export async function feedbackAction(fd: FormData) {
   revalidatePath("/me");
 }
 
-export async function changePinAction(_prev: FormState, fd: FormData): Promise<FormState> {
+export async function deleteMeAction() {
   const member = await getCurrentMember();
-  if (!member) return { ok: false, message: "Войдите заново" };
-  const current = String(fd.get("current") ?? "");
-  const next = String(fd.get("next") ?? "").trim();
-  if (!/^\d{4,6}$/.test(next)) return { ok: false, errors: { next: "PIN — от 4 до 6 цифр" } };
-  if (await limits.memberAuth()) return { ok: false, message: TOO_MANY };
-  const repo = getRepo();
-  const auth = await repo.getMemberAuth(member.phone);
-  if (!auth) return { ok: false, message: "Профиль не найден" };
-  const err = await checkMemberPin(repo, auth, current);
-  if (err === "wrong") return { ok: false, errors: { current: "Текущий PIN не подходит" } };
-  if (err) return { ok: false, message: err };
-  await repo.setMemberPin(member.id, await hashPassword(next));
-  return { ok: true, message: "PIN изменён" };
+  if (member) await getRepo().deleteMember(member.id);
+  await clearCurrentMember();
+  redirect("/me?deleted=1");
 }
 
 export async function forgetMeAction() {
@@ -221,7 +175,7 @@ export async function loginAction(_prev: FormState, fd: FormData): Promise<FormS
   const org = (await verifyPassword(email, password)) ? await getRepo().getOrganizer(email) : null;
   if (!org) return { ok: false, message: "Неверный email или пароль", values };
   await setOrgSession(email);
-  redirect(org.is_admin ? "/admin" : org.club_id ? "/org" : "/new-club");
+  redirect(org.is_admin || isAdminEmail(org.email) ? "/admin" : org.club_id ? "/org" : "/new-club");
 }
 
 export async function changePasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -270,16 +224,17 @@ export async function createClubAction(_prev: FormState, fd: FormData): Promise<
       club = await repo.createClubWithOrganizer(city.slug, input, email, await hashPassword(acc.password));
     } catch (e) {
       if (!(e instanceof EmailTakenError)) throw e;
-      // Existing account whose club was deleted: the right password lets them start a new club.
+      // Existing account + right password: start a new club, or just sign in if they already have one.
       const existing = await repo.getOrganizer(email);
       const pwOk = !(await limits.login(email)) && (await verifyPassword(email, acc.password));
-      club = existing && !existing.club_id && pwOk ? await repo.createClubForOrganizer(city.slug, input, email) : null;
-      if (!club)
-        return {
-          ok: false,
-          errors: { ...pwNote, email: "Этот email уже зарегистрирован. Войдите в кабинет или введите верный пароль." },
-          values,
-        };
+      if (!existing || !pwOk)
+        return { ok: false, errors: { ...pwNote, email: "Этот email уже зарегистрирован — введите свой пароль от него." }, values };
+      if (existing.club_id) {
+        await setOrgSession(email);
+        redirect("/org");
+      }
+      club = await repo.createClubForOrganizer(city.slug, input, email);
+      if (!club) return { ok: false, message: "У вас уже есть клуб.", values };
     }
   }
   await repo.log({ type: "create_club", visitor_id: await getVisitorId(), member_id: null, club_id: club.id, event_id: null });
@@ -288,14 +243,11 @@ export async function createClubAction(_prev: FormState, fd: FormData): Promise<
   redirect("/org?welcome=1");
 }
 
-export async function deleteClubAction(_prev: FormState, fd: FormData): Promise<FormState> {
+export async function deleteClubAction(fd: FormData) {
   const repo = getRepo();
   const club = await repo.getClubById(String(fd.get("club_id") ?? ""));
-  if (!club) return { ok: false, message: "Клуб не найден" };
+  if (!club) return;
   const session = await requireClubAccess(club.id);
-  const typed = String(fd.get("confirm") ?? "").trim().toLowerCase();
-  if (typed !== club.name.trim().toLowerCase())
-    return { ok: false, errors: { confirm: "Название не совпадает — клуб не удалён." } };
   await repo.deleteClub(club.id);
   revalidatePath(`/${club.city}`);
   revalidatePath(`/c/${club.slug}`);
@@ -398,7 +350,6 @@ export async function deleteEventAction(fd: FormData) {
   const ev = await repo.getEvent(String(fd.get("event_id") ?? ""));
   if (!ev) return;
   const s = await requireClubAccess(ev.club_id);
-  if (fd.get("confirm") !== "on") return;
   await repo.deleteEvent(ev.id);
   revalidatePath("/org");
   redirect(s.isAdmin && s.club_id !== ev.club_id ? `/org?club=${ev.club_id}` : "/org");
@@ -456,29 +407,8 @@ export async function addWalkInAction(_prev: FormState, fd: FormData): Promise<F
 
 // ======================= Admin =======================
 
-function sameSecret(a: string, b: string) {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-}
-
-export async function claimAdminAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const s = await requireOrg();
-  if (s.isAdmin) redirect("/admin");
-  const code = String(fd.get("code") ?? "").trim();
-  const expected = process.env.ADMIN_SETUP_CODE ?? "";
-  if (expected.length < 12) return { ok: false, message: "Код администратора не настроен на сервере." };
-  if (!mayClaimAdmin(s.email)) return { ok: false, message: "Этот аккаунт не может стать администратором." };
-  if (await limits.adminClaim()) return { ok: false, message: TOO_MANY };
-  if (!sameSecret(code, expected)) return { ok: false, errors: { code: "Неверный код" } };
-  await getRepo().setAdmin(s.email, true);
-  redirect("/admin");
-}
-
-export async function deleteAllClubsAction(_prev: FormState, fd: FormData): Promise<FormState> {
+export async function deleteAllClubsAction() {
   await requireAdmin();
-  if (String(fd.get("confirm") ?? "").trim().toUpperCase() !== "УДАЛИТЬ ВСЁ")
-    return { ok: false, errors: { confirm: "Введите «УДАЛИТЬ ВСЁ», чтобы подтвердить." } };
   const n = await getRepo().deleteAllClubs();
   revalidatePath("/shymkent");
   redirect(`/admin?deleted=all&n=${n}`);
@@ -503,18 +433,6 @@ export async function adminResetPasswordAction(_prev: FormState, fd: FormData): 
   const temp = randomBytes(9).toString("base64url").slice(0, 12);
   await repo.setPasswordHash(email, await hashPassword(temp));
   return { ok: true, message: `Новый временный пароль для ${email}: ${temp} — передайте его лично и попросите сменить в кабинете.` };
-}
-
-export async function adminResetPinAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  await requireAdmin();
-  const phone = normalizePhone(String(fd.get("phone") ?? ""));
-  if (!phone) return { ok: false, message: "Проверьте номер" };
-  const repo = getRepo();
-  const member = await repo.findMemberByPhone(phone);
-  if (!member) return { ok: false, message: "Участник с таким номером не найден" };
-  const pin = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  await repo.setMemberPin(member.id, await hashPassword(pin));
-  return { ok: true, message: `Новый PIN для ${member.name} (${phone}): ${pin} — передайте его лично.` };
 }
 
 export async function logoutAction() {

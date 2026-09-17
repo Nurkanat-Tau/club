@@ -51,6 +51,13 @@ export async function newFeaturesContract(repo: Repo) {
   expect(await repo.rateLimited("t:1", 2, 60)).toBe(true);
   expect(await repo.rateLimited("t:2", 2, 60)).toBe(false);
 
+  // delete a member: their sign-ups go too
+  const c = await repo.createMember("Вика", "+77010000003", "");
+  await repo.joinClub(club.id, c.id, null);
+  await repo.deleteMember(c.id);
+  expect(await repo.findMemberByPhone("+77010000003")).toBeNull();
+  expect(await repo.isMember(club.id, c.id)).toBe(false);
+
   // delete event
   await repo.deleteEvent(ev.id);
   expect(await repo.getEvent(ev.id)).toBeNull();

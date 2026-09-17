@@ -47,7 +47,7 @@ create table if not exists members (
   created_at timestamptz not null default now()
 );
 
--- Members sign in on other devices with phone + PIN.
+-- pin_* columns are unused (members sign in with their phone); kept so old databases stay compatible.
 alter table members add column if not exists pin_hash text;
 alter table members add column if not exists pin_failures int not null default 0;
 alter table members add column if not exists pin_locked_until timestamptz;

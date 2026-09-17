@@ -16,27 +16,27 @@ export function NewClubForm({ city, signedInAs }: { city: string; signedInAs?: {
   const v: Record<string, string> = state?.values ?? (signedInAs ? { organizer_name: signedInAs.name } : {});
 
   return (
-    <form action={action} className="space-y-8">
+    <form action={action} className="space-y-5">
       <input type="hidden" name="city" value={city} />
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
 
-      <ClubFields values={v} errors={e} formKey={state?.n ?? 0} />
+      <ClubFields values={v} errors={e} formKey={state?.n ?? 0} compact />
 
       {signedInAs ? (
         <p className="card p-4 text-sm">Клуб будет привязан к вашему аккаунту <b>{signedInAs.email}</b>.</p>
       ) : (
         <fieldset className="card space-y-4 p-5">
-          <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted">Вход в кабинет</legend>
+          <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted">Ваш аккаунт</legend>
           <div>
             <label className="label" htmlFor="email">Email</label>
             <input id="email" name="email" type="email" required autoComplete="email" className="input" defaultValue={v.email} />
             {e.email && <p className="err">{e.email}</p>}
           </div>
           <div>
-            <label className="label" htmlFor="password">Пароль (минимум 8 символов)</label>
-            <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="input" />
+            <label className="label" htmlFor="password">Пароль (минимум 6 символов)</label>
+            <input id="password" name="password" type="password" required minLength={6} autoComplete="new-password" className="input" />
             {e.password && <p className="err">{e.password}</p>}
-            <p className="mt-1 text-xs text-muted">Удаляли свой клуб раньше? Введите тот же email и пароль.</p>
+            <p className="mt-1 text-xs text-muted">Уже есть аккаунт? Введите тот же email и пароль.</p>
           </div>
         </fieldset>
       )}

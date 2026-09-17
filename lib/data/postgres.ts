@@ -188,6 +188,10 @@ export function createPostgresRepo(connectionString: string): Repo {
       const { pin_hash, pin_locked_until, ...member } = r;
       return { member, pin_hash, locked_until: pin_locked_until };
     },
+    async deleteMember(id) {
+      await q("update logs set member_id = null where member_id = $1", [id]);
+      await q("delete from members where id = $1", [id]);
+    },
     async createMember(name, phone, pinHash) {
       const r = await one<Member>(
         `insert into members (name, phone, pin_hash) values ($1,$2,$3)

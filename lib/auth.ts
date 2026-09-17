@@ -20,7 +20,6 @@ export const limits = {
   /** New clubs per IP. */
   newClub: async () => getRepo().rateLimited(`new-club:${await clientIp()}`, 5, 60 * 60),
   /** Admin setup code attempts per IP. */
-  adminClaim: async () => getRepo().rateLimited(`admin-claim:${await clientIp()}`, 5, 60 * 60),
 };
 
 /** True if the email/password pair matches an organizer account. */

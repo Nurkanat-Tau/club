@@ -25,17 +25,13 @@ const phone = z
   .string()
   .transform((v) => normalizePhone(v))
   .refine((v): v is string => v !== null, "Проверьте номер: +7 701 123 45 67 (другие страны — с «+», например +998…)");
-const pin = z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр");
-
 /** Join / sign-up form. Name is only required for new people (checked in the action). */
 export const memberSchema = z.object({
   name: str(LIMITS.memberName),
   phone,
-  consent: z.literal("on", { message: "Нужно согласие на обработку данных" }),
-  pin,
 });
 
-export const memberLoginSchema = z.object({ phone, pin });
+export const memberLoginSchema = z.object({ phone });
 
 export const eventSchema = z.object({
   title: str(LIMITS.eventTitle).min(3, "Название — минимум 3 символа"),
@@ -59,7 +55,7 @@ export const eventSchema = z.object({
 export const clubSchema = z.object({
   name: str(LIMITS.clubName).min(3, "Название — минимум 3 символа"),
   category: z.string().refine((v) => !!getCategory(v), "Выберите категорию"),
-  description: str(LIMITS.clubDescription).min(20, "Опишите клуб подробнее (минимум 20 символов)"),
+  description: str(LIMITS.clubDescription).default(""),
   schedule_text: str(LIMITS.schedule).min(2, "Укажите, когда проходят встречи"),
   meeting_point: str(LIMITS.place).min(2, "Укажите место встречи"),
   chat_link: optionalUrl,
@@ -69,13 +65,13 @@ export const clubSchema = z.object({
     .max(200, "Слишком длинно")
     .refine((v) => v === "" || normalizeInstagram(v) !== null, "Укажите ник, например shymkent.run, или ссылку на профиль")
     .transform((v) => normalizeInstagram(v)),
-  organizer_name: str(LIMITS.organizerName).min(2, "Укажите ваше имя"),
+  organizer_name: str(LIMITS.organizerName).default(""),
   organizer_bio: str(LIMITS.organizerBio).default(""),
 });
 
 export const accountSchema = z.object({
   email: z.string().trim().toLowerCase().max(200).email("Введите корректный email"),
-  password: z.string().min(8, "Пароль — минимум 8 символов").max(LIMITS.password, "Пароль слишком длинный"),
+  password: z.string().min(6, "Пароль — минимум 6 символов").max(LIMITS.password, "Пароль слишком длинный"),
 });
 
 export const newClubSchema = clubSchema.extend(accountSchema.shape);

@@ -214,6 +214,8 @@ export interface Repo {
   markAllAttended(eventId: string): Promise<void>;
   listClubFeedback(clubId: string): Promise<FeedbackRow[]>;
   findMemberByPhone(phone: string): Promise<Member | null>;
+  /** Deletes a member with their memberships, sign-ups and ratings. */
+  deleteMember(id: string): Promise<void>;
 
   /** Counts a hit; true when the key exceeded `limit` hits within `windowSec`. */
   rateLimited(key: string, limit: number, windowSec: number): Promise<boolean>;

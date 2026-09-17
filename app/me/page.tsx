@@ -6,9 +6,8 @@ import { Footer } from "@/components/Footer";
 import { MemberLoginForm } from "@/components/MemberLoginForm";
 import { EventRow } from "@/components/EventRow";
 import { SubmitButton } from "@/components/SubmitButton";
-import { ChangePinForm } from "@/components/ChangePinForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { feedbackAction, forgetMeAction, leaveClubAction } from "@/app/actions";
+import { deleteMeAction, feedbackAction, forgetMeAction, leaveClubAction } from "@/app/actions";
 import { formatDay, isPast } from "@/lib/time";
 import { formatPhone } from "@/lib/phone";
 import { countLabel, EVENTS } from "@/lib/text";
@@ -19,7 +18,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Мои встречи", robots: { index: false } };
 
 export default async function MePage({ searchParams }: PageProps<"/me">) {
-  const n = (await searchParams).next;
+  const sp = await searchParams;
+  const n = sp.next;
   const next = typeof n === "string" && n.startsWith("/") && !n.startsWith("//") ? n : undefined;
   const member = await getCurrentMember();
   if (!member) {
@@ -29,8 +29,9 @@ export default async function MePage({ searchParams }: PageProps<"/me">) {
         <main className="space-y-6 px-4 pb-12 pt-8">
           <section className="space-y-1">
             <h1 className="text-2xl font-bold">Войти</h1>
-            <p className="text-muted">Уже вступали в клуб? Введите номер и PIN — ваши клубы и встречи появятся на этом устройстве.</p>
+            <p className="text-muted">Уже вступали в клуб? Введите свой номер — ваши клубы и встречи появятся на этом устройстве.</p>
           </section>
+          {sp.deleted && <p className="card p-4 font-semibold">Ваш профиль и все данные удалены.</p>}
           <MemberLoginForm next={next} />
           <section className="card space-y-2 p-5">
             <p className="font-semibold">Ещё не участвовали?</p>
@@ -147,16 +148,14 @@ export default async function MePage({ searchParams }: PageProps<"/me">) {
           </details>
         )}
 
-        <ChangePinForm />
-
         <section className="space-y-2 text-center">
-          <p className="text-xs text-muted">На другом устройстве войдите через «Войти» с номером и PIN.</p>
+          <p className="text-xs text-muted">На другом устройстве нажмите «Войти» и введите свой номер.</p>
           <form action={forgetMeAction}>
             <SubmitButton className="text-sm text-muted underline">Выйти на этом устройстве</SubmitButton>
           </form>
-          <p className="text-xs text-muted">
-            Хотите удалить свои данные? <Link href="/privacy" className="underline">Как это сделать</Link>
-          </p>
+          <form action={deleteMeAction}>
+            <ConfirmButton label="Удалить мой профиль" confirmLabel="Да, удалить всё" className="text-sm text-bad underline" />
+          </form>
         </section>
       </main>
       <Footer />

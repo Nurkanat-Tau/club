@@ -52,14 +52,10 @@ export function JoinForm({ clubId, clubSlug, known, isMember, chatHref, nextEven
     <form action={action} className="card space-y-4 p-4">
       <input type="hidden" name="club_slug" value={clubSlug} />
       <input type="hidden" name="source" value="club_page" />
+      {!known && <p className="text-sm text-muted">Уже участвовали? Просто введите тот же номер.</p>}
       {!known && <MemberFields errors={state?.errors} values={state?.values} />}
       {state?.message && !state.ok && <p className="err">{state.message}</p>}
       <SubmitButton>Вступить в клуб</SubmitButton>
-      {!known && (
-        <p className="text-center text-sm">
-          <a href={`/me?next=/c/${clubSlug}`} className="underline">Войти по номеру и PIN</a>
-        </p>
-      )}
     </form>
   );
 }

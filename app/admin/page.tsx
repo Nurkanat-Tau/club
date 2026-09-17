@@ -5,7 +5,7 @@ import { getOrgSession } from "@/lib/session";
 import { computeMetrics } from "@/lib/metrics";
 import { logoutAction, setClubHiddenAction } from "@/app/actions";
 import { DeleteAllClubsForm } from "@/components/DeleteAllClubsForm";
-import { AdminResetPasswordForm, AdminResetPinForm } from "@/components/AdminResetForms";
+import { AdminResetPasswordForm } from "@/components/AdminResetForms";
 import { FlashCleaner } from "@/components/FlashCleaner";
 
 export const dynamic = "force-dynamic";
@@ -127,10 +127,7 @@ export default async function Admin({ searchParams }: PageProps<"/admin">) {
         </ul>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2">
-        <AdminResetPasswordForm />
-        <AdminResetPinForm />
-      </section>
+      <AdminResetPasswordForm />
 
       {clubRows.length > 0 && <DeleteAllClubsForm count={clubRows.length} />}
       <p className="text-xs text-muted">Обновлено: {new Date(m.generatedAt).toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}. Пороговые значения — в docs/01-validation.md.</p>

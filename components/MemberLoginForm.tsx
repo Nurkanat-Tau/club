@@ -15,17 +15,8 @@ export function MemberLoginForm({ next }: { next?: string }) {
         <PhoneInput id="login-phone" defaultValue={state?.values?.phone} />
         {e.phone && <p className="err">{e.phone}</p>}
       </div>
-      <div>
-        <label className="label" htmlFor="login-pin">PIN-код</label>
-        <input id="login-pin" name="pin" type="password" inputMode="numeric" pattern="[0-9]{4,6}" maxLength={6} autoComplete="off" required className="input" placeholder="••••" />
-        {e.pin && <p className="err">{e.pin}</p>}
-      </div>
       {state?.message && <p className="err">{state.message}</p>}
       <SubmitButton pendingText="Входим…">Войти</SubmitButton>
-      <p className="text-xs text-muted">
-        PIN вы придумали, когда впервые вступили в клуб или записались на встречу. Забыли PIN? Напишите администратору
-        Club (ссылка «Связаться» внизу страницы) — вам выдадут новый.
-      </p>
     </form>
   );
 }

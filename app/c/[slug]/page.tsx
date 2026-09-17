@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: PageProps<"/c/[slug]">) {
   const club = await getPublicClubBySlug((await params).slug);
   if (!club) return { title: "Клуб не найден", robots: { index: false } };
-  const description = `${club.schedule_text} · ${club.meeting_point}. ${club.description}`.slice(0, 200);
+  const description = [`${club.schedule_text} · ${club.meeting_point}.`, club.description].filter(Boolean).join(" ").slice(0, 200);
   return {
     title: club.name,
     description,
@@ -65,7 +65,7 @@ export default async function ClubPage({ params }: PageProps<"/c/[slug]">) {
               <ShareButton title={club.name} text={`${club.emoji} ${club.name} — ${club.schedule_text}`} path={`/c/${club.slug}`} />
             </div>
             <h1 className="break-words text-2xl font-bold tracking-tight">{club.name}</h1>
-            <Linkified text={club.description} />
+            {club.description && <Linkified text={club.description} />}
             <dl className="grid grid-cols-2 gap-3 pt-2 text-sm">
               <div>
                 <dt className="text-muted">В клубе</dt>
@@ -105,9 +105,10 @@ export default async function ClubPage({ params }: PageProps<"/c/[slug]">) {
           )}
         </section>
 
+        {(club.organizer_name || club.organizer_bio || insta || club.chat_link) && (
         <section className="card space-y-2 p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Организатор</h2>
-          <p className="break-words text-lg font-semibold">{club.organizer_name}</p>
+          {club.organizer_name && <p className="break-words text-lg font-semibold">{club.organizer_name}</p>}
           {club.organizer_bio && <Linkified text={club.organizer_bio} className="text-muted" />}
           <div className="flex flex-wrap gap-2 pt-1">
             {insta && (
@@ -119,6 +120,7 @@ export default async function ClubPage({ params }: PageProps<"/c/[slug]">) {
           </div>
           {isMember && members > 1 && <p className="text-xs text-muted">Вы и ещё {members - 1} {plural(members - 1, MEMBERS)} в этом клубе.</p>}
         </section>
+        )}
       </main>
       <Footer />
     </>

@@ -7,7 +7,7 @@ The MVP only needs to answer: **do people join, attend, and come back, and do or
 | Built ✅ | Why |
 |---|---|
 | City → clubs → club page → events | Discovery (H1) |
-| Join a club with name + WhatsApp number (no password) | Lowest possible friction; people in KZ live in WhatsApp |
+| Join a club with name + WhatsApp number (no password, no PIN) | Lowest possible friction; people in KZ live in WhatsApp |
 | "I'll come" RSVP, cancel, capacity limit, "who's going" (first names) | Commitment + social proof (H2) |
 | Add to calendar (.ics) | Free reminder without SMS costs |
 | Link to the club's WhatsApp/Telegram chat (click tracked) | Communication stays where people already are; we don't build chat |
@@ -94,10 +94,10 @@ logs (type, visitor_id, member_id, club_id, event_id, created_at)
 
 ## Authentication
 
-- **Members:** phone + a 4–6 digit PIN chosen at first join (scrypt-hashed). A signed, httpOnly cookie remembers the device for a year. On another device they sign in on `/me` with phone + PIN. 5 wrong PINs lock that number for 15 minutes (stored in the database, so it works across servers).
-  - *Next step if clubs become paid:* WhatsApp/SMS one-time codes instead of a PIN.
+- **Members:** name + phone, nothing else (decision 2026-09-17: simplicity over security for a free pilot). A signed, httpOnly cookie remembers the device for a year. On another device they type their phone on `/me`. Anyone who knows a number could see that person's clubs and sign-ups — acceptable while nothing sensitive or paid is stored.
+  - *Next step if clubs become paid:* WhatsApp/SMS one-time codes.
 - **Organizers & admin:** sign up themselves on `/new-club` (email + password, scrypt-hashed in our own table). After login we set our own signed cookie (30 days); every request re-checks the `organizers` table, so removing a row revokes access immediately.
-- **Admins:** an organizer account whose email is in `ADMIN_EMAILS` **and** who entered the secret `ADMIN_SETUP_CODE` once at `/admin/claim` (stored as `organizers.is_admin`). This stops a stranger from registering the admin email first.
+- **Admins:** organizer accounts whose email is in `ADMIN_EMAILS` (automatic). The owner must register that email right after the first deploy so nobody else can.
 
 ## Technology stack
 
@@ -149,9 +149,9 @@ Anything else (e.g. "how did you hear about us?") → ask in person and write it
 - Signed httpOnly `SameSite=Lax` cookies, `Secure` in production; `SESSION_SECRET` required in production.
 - Database access is server-only (`server-only` import guard); organizer passwords are scrypt-hashed; club creation is rate-limited and has a honeypot; admins can hide clubs.
 - Server-side validation (zod): phone format, lengths, URLs must be `http(s)` (blocks `javascript:` links).
-- Rate limits stored in the database (work across servers): organizer login 8 / 15 min per email, member sign-in 30 / 15 min per IP, new profiles 15 / hour, new clubs 5 / hour, admin claim 5 / hour. Member PIN: 5 wrong tries lock the number for 15 minutes.
+- Rate limits stored in the database (work across servers): organizer login 8 / 15 min per email, member sign-in 30 / 15 min per IP, new profiles 15 / hour, new clubs 5 / hour.
 - Seat booking is atomic (`select … for update`), so two people can't take the last place.
-- Sign-in errors don't reveal whether a phone number is registered.
+- Deleting anything (event, club, all clubs, own profile) takes two taps: the button, then «Да, …».
 - Honeypot field against simple bots.
 - Phone numbers visible only to that club's organizer; other members see first names only.
 - Consent checkbox + privacy page (Law of RK on personal data — **have the text reviewed before a wide launch**).

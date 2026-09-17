@@ -45,10 +45,10 @@ describe("validation", () => {
     const r = memberSchema.safeParse({ name: "Айгерим", phone: "87011234567", consent: "on", pin: "1234" });
     expect(r.success && r.data.phone).toBe("+77011234567");
   });
-  it("requires consent and a valid phone", () => {
+  it("requires a valid phone", () => {
     const r = memberSchema.safeParse({ name: "A", phone: "123", consent: "", pin: "12a" });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.map((i) => i.path[0]).sort()).toEqual(["consent", "phone", "pin"]);
+    if (!r.success) expect(r.error.issues.map((i) => i.path[0])).toEqual(["phone"]);
   });
   it("parses event form", () => {
     const r = eventSchema.safeParse({
