@@ -1,72 +1,88 @@
 import { z } from "zod";
-import { normalizeKzPhone } from "./phone";
+import { normalizePhone } from "./phone";
+import { normalizeInstagram, normalizePrice } from "./text";
+
+// Russian default messages for anything without a custom one.
+z.config(z.locales.ru());
 import { fromLocalInput } from "./time";
 import { getCategory } from "./categories";
 
-const str = (max: number) => z.string().trim().max(max);
+/** Trimmed string with a Russian "too long" message. */
+const str = (max: number) => z.string().trim().max(max, `Слишком длинно: максимум ${max} символов`);
 const optionalUrl = z
   .string()
   .trim()
-  .max(500)
+  .max(500, "Ссылка слишком длинная")
   .transform((v) => (v === "" ? null : v))
   .refine((v) => v === null || /^https?:\/\//i.test(v), "Ссылка должна начинаться с http:// или https://");
 
+export const LIMITS = {
+  memberName: 60, clubName: 60, clubDescription: 2000, schedule: 200, place: 200, organizerName: 80, organizerBio: 500,
+  eventTitle: 100, eventDescription: 2000, price: 60, comment: 1000, password: 200,
+} as const;
+
+const phone = z
+  .string()
+  .transform((v) => normalizePhone(v))
+  .refine((v): v is string => v !== null, "Проверьте номер: +7 701 123 45 67 (другие страны — с «+», например +998…)");
+const pin = z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр");
+
+/** Join / sign-up form. Name is only required for new people (checked in the action). */
 export const memberSchema = z.object({
-  name: str(60).min(2, "Введите имя"),
-  phone: z
-    .string()
-    .transform((v) => normalizeKzPhone(v))
-    .refine((v): v is string => v !== null, "Введите казахстанский номер, например +7 701 123 45 67"),
+  name: str(LIMITS.memberName),
+  phone,
   consent: z.literal("on", { message: "Нужно согласие на обработку данных" }),
-  pin: z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр"),
+  pin,
 });
 
-export const memberLoginSchema = z.object({
-  phone: memberSchema.shape.phone,
-  pin: z.string().trim().regex(/^\d{4,6}$/, "PIN — от 4 до 6 цифр"),
-});
+export const memberLoginSchema = z.object({ phone, pin });
 
 export const eventSchema = z.object({
-  title: str(100).min(3, "Название слишком короткое"),
-  description: str(2000).default(""),
+  title: str(LIMITS.eventTitle).min(3, "Название — минимум 3 символа"),
+  description: str(LIMITS.eventDescription).default(""),
   starts_at: z
     .string()
     .transform((v) => fromLocalInput(v))
     .refine((v): v is string => v !== null, "Укажите дату и время"),
-  duration_min: z.coerce.number().int().min(15, "Минимум 15 минут").max(24 * 60),
-  location_name: str(200).min(2, "Укажите место"),
+  duration_min: z.coerce.number({ message: "Укажите длительность" }).int("Целое число минут").min(15, "Минимум 15 минут").max(24 * 60, "Максимум 24 часа"),
+  location_name: str(LIMITS.place).min(2, "Укажите место"),
   location_url: optionalUrl,
   capacity: z
     .string()
     .trim()
     .transform((v) => (v === "" ? null : Number(v)))
     .refine((v) => v === null || (Number.isInteger(v) && v > 0 && v <= 10000), "Лимит — целое число больше 0"),
-  price_text: str(100).transform((v) => (v === "" ? null : v)),
+  price_text: str(LIMITS.price).transform((v) => normalizePrice(v)),
 });
 
 
 export const clubSchema = z.object({
-  name: str(60).min(3, "Название — минимум 3 символа"),
+  name: str(LIMITS.clubName).min(3, "Название — минимум 3 символа"),
   category: z.string().refine((v) => !!getCategory(v), "Выберите категорию"),
-  description: str(2000).min(20, "Опишите клуб подробнее (минимум 20 символов)"),
-  schedule_text: str(200).min(2, "Укажите, когда проходят встречи"),
-  meeting_point: str(200).min(2, "Укажите место встречи"),
+  description: str(LIMITS.clubDescription).min(20, "Опишите клуб подробнее (минимум 20 символов)"),
+  schedule_text: str(LIMITS.schedule).min(2, "Укажите, когда проходят встречи"),
+  meeting_point: str(LIMITS.place).min(2, "Укажите место встречи"),
   chat_link: optionalUrl,
-  instagram: str(60).transform((v) => (v === "" ? null : v.replace(/^@/, ""))),
-  organizer_name: str(80).min(2, "Укажите ваше имя"),
-  organizer_bio: str(500).default(""),
+  instagram: z
+    .string()
+    .trim()
+    .max(200, "Слишком длинно")
+    .refine((v) => v === "" || normalizeInstagram(v) !== null, "Укажите ник, например shymkent.run, или ссылку на профиль")
+    .transform((v) => normalizeInstagram(v)),
+  organizer_name: str(LIMITS.organizerName).min(2, "Укажите ваше имя"),
+  organizer_bio: str(LIMITS.organizerBio).default(""),
 });
 
 export const accountSchema = z.object({
   email: z.string().trim().toLowerCase().max(200).email("Введите корректный email"),
-  password: z.string().min(8, "Пароль — минимум 8 символов").max(200),
+  password: z.string().min(8, "Пароль — минимум 8 символов").max(LIMITS.password, "Пароль слишком длинный"),
 });
 
 export const newClubSchema = clubSchema.extend(accountSchema.shape);
 
 export const feedbackSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),
-  comment: str(1000).transform((v) => (v === "" ? null : v)),
+  comment: str(LIMITS.comment).transform((v) => (v === "" ? null : v)),
 });
 
 export type FormState = {
@@ -89,3 +105,13 @@ export function formErrors(err: z.ZodError): Record<string, string> {
 export function pick(fd: FormData, keys: string[]) {
   return Object.fromEntries(keys.map((k) => [k, (fd.get(k) as string | null) ?? ""]));
 }
+
+export const passwordChangeSchema = z.object({
+  current: z.string().min(1, "Введите текущий пароль"),
+  next: accountSchema.shape.password,
+});
+
+export const walkInSchema = z.object({
+  name: str(LIMITS.memberName).min(2, "Введите имя"),
+  phone,
+});

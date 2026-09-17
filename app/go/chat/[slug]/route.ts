@@ -6,7 +6,8 @@ import { unsign } from "@/lib/session";
 /** Logs the click, then sends the person to the club's WhatsApp/Telegram chat. */
 export async function GET(request: Request, ctx: RouteContext<"/go/chat/[slug]">) {
   const repo = getRepo();
-  const club = await repo.getClubBySlug((await ctx.params).slug);
+  const found = await repo.getClubBySlug((await ctx.params).slug);
+  const club = found && !found.hidden ? found : null;
   if (!club?.chat_link || !/^https?:\/\//.test(club.chat_link)) {
     return NextResponse.redirect(new URL(club ? `/c/${club.slug}` : "/", request.url));
   }

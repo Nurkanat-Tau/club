@@ -19,10 +19,12 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 
 **Organizers** open `/new-club` and create a club: name, category, description, schedule, place, chat link, plus their email and a password. After that they can:
 
-- create, edit and cancel events
+- create, edit, copy, cancel and delete events; repeat an event weekly for up to 12 weeks
+- copy ready-made WhatsApp texts: invitation, reminder, "time changed", "cancelled"
 - see who's coming and send each person a WhatsApp reminder in one tap
-- mark who actually came
-- see their members
+- mark who actually came (or "everyone else came" in one tap), add walk-ins
+- see their members (+ CSV for Excel) and ratings/comments from members
+- change their password in "Аккаунт"
 - edit everything on the club page (name, category, description, schedule, place, chat, Instagram, organizer info); the club's link stays the same
 - delete their club (they type the club name to confirm). Its events, sign-ups and member list are deleted for good. Their account stays, so they can create a new club.
 
@@ -32,12 +34,19 @@ The site starts **empty**. Everything on it comes from users and is saved in the
 - On any other phone or computer, they open "Мои встречи" and sign in with their number and PIN, and see the same clubs and events.
 - After 5 wrong PINs, sign-in for that number is locked for 15 minutes.
 
-They can also rate past events.
+They can also rate past events, leave a club, change their PIN, and delete their profile ("Удалить мои данные").
 
-**Admins** (emails listed in `ADMIN_EMAILS`) sign up by creating a club like anyone else. Then `/admin` shows the experiment dashboard and lets them:
+**Admins.** Being in `ADMIN_EMAILS` is not enough on its own (anyone could register that email first). An admin:
 
-- hide or show any club
+1. signs up by creating a club with an email listed in `ADMIN_EMAILS`;
+2. opens **Кабинет → Аккаунт → «Активировать права администратора»** (`/admin/claim`) and enters the secret `ADMIN_SETUP_CODE` once.
+
+Then `/admin` shows the experiment dashboard and lets them:
+
+- hide or show any club (hidden clubs return "not found" to the public)
 - edit or delete any club ("Изменить / удалить")
+- see all organizer accounts
+- give an organizer a temporary password, or a member a new PIN
 - delete **all** clubs at once (type «УДАЛИТЬ ВСЁ» to confirm)
 
 Member profiles and organizer accounts are kept.
@@ -66,10 +75,13 @@ Open http://localhost:3000. Without a database the data lives in memory and rese
 3. In **Settings → Environment Variables**, set:
    - `SESSION_SECRET`: 32+ random characters
    - `ADMIN_EMAILS`: your email
+   - `ADMIN_SETUP_CODE`: a secret of 12+ characters (you type it once at `/admin/claim`)
+   - `NEXT_PUBLIC_SITE_URL`: the site's address, e.g. `https://club-rho-six.vercel.app`
+   - optional `NEXT_PUBLIC_CONTACT_WHATSAPP`: your number, shown as "Связаться" in the footer
    - Remove `ALLOW_DEMO` if it's set.
 4. **Redeploy** (Deployments → ⋯ → Redeploy).
 
-The app creates its own tables on the first request. There's no SQL to run by hand. Then open `/new-club` and create your club with your admin email, and `/admin` will work.
+The app creates its own tables on the first request. There's no SQL to run by hand. Then open `/new-club`, create your club with your admin email, and activate admin rights at `/admin/claim`.
 
 Every push to `main` redeploys automatically.
 
@@ -80,9 +92,9 @@ Every push to `main` redeploys automatically.
 | Hide a spam or inactive club | `/admin` → "Скрыть" |
 | Delete one club / all clubs | `/admin` → "Изменить / удалить", or "Удалить все клубы" at the bottom |
 | Look at or export raw data | Vercel → Storage → your database → SQL editor / Neon console |
-| Delete a person's data on request | `delete from members where phone = '+77…';` (their memberships, RSVPs and ratings go too) |
-| A member forgot their PIN | `update members set pin_hash = null where phone = '+77…';` Their next sign-up or sign-in sets a new PIN. |
-| Reset an organizer's password | Ask them to create a new account, or update `organizers.password_hash` (scrypt format, see `lib/password.ts`) |
+| Delete a person's data on request | They can do it themselves on "Мои встречи" → "Удалить мои данные". Or: `delete from members where phone = '+77…';` |
+| A member forgot their PIN | `/admin` → "Участник забыл PIN" → pass the new PIN to them personally |
+| An organizer forgot their password | `/admin` → "Организатор забыл пароль" → pass the temporary password personally; they change it in "Аккаунт" |
 
 ## 4. For developers
 
@@ -97,6 +109,7 @@ npm run build      # production build
 - Stack: Next.js 16 (App Router, Server Actions), TypeScript, Tailwind 4, Postgres (`pg`), Zod, Vitest. Organizer passwords are hashed with scrypt.
 - Data access goes through the `Repo` interface in `lib/data/`: `memory.ts` (no database) and `postgres.ts` (production). The schema is in `lib/data/schema.ts` (copy in `db/schema.sql`) and is applied automatically.
 - Postgres integration test: `TEST_DATABASE_URL=postgres://… npm test` (it wipes that database).
+- Browser test of the whole flow: `tests/e2e/full-flow.e2e.mjs` (needs a build, playwright and a throwaway Postgres).
 - All writes are server actions in `app/actions.ts`. Each one re-checks permissions.
 
 ```
@@ -104,10 +117,11 @@ app/
   [city]/          city page
   c/[slug]/        club page
   e/[id]/          event page (+ /ics calendar file)
-  me/              my events + ratings
+  me/              my events, sign-in on a new device, ratings
   new-club/        organizer sign-up: create a club
-  org/             organizer dashboard (login, events, members, club)
-  admin/           experiment metrics
+  org/             organizer dashboard (login, events, members, feedback, club, account)
+  admin/           experiment metrics, organizers, resets; admin/claim
+  robots.ts, sitemap.ts, opengraph images for link previews
   go/chat/[slug]/  tracked redirect to the club chat
   actions.ts       all server actions
 components/        UI
@@ -123,18 +137,5 @@ tests/             unit tests
 
 ### What was tested
 
-- Unit tests: phone normalization, Kazakhstan time zone, validation, slugs (Russian and Kazakh), password hashing, the memory repository, metrics.
-- A Postgres integration test of the full data flow on an empty database.
-- An end-to-end browser run against real Postgres, starting empty:
-  - creating a club (including a validation error that keeps what was typed, and a duplicate email being rejected)
-  - the organizer's first event
-  - a member joining (with a PIN) and signing up for an event
-  - signing in on a second device: a wrong PIN and an unknown number are rejected, and the right PIN shows the same data
-  - someone else's number with a wrong PIN being blocked, with lockout after 5 tries
-  - the organizer seeing that member
-  - restarting the server, with all data and logins still there
-  - logout and login
-  - a normal organizer being blocked from `/admin`
-  - an admin hiding a club
-  - an organizer editing every field and deleting their own club (a wrong confirmation is refused, and the events and sign-ups disappear), then starting a new club
-  - an admin deleting another organizer's club, then deleting all clubs
+- Unit tests (memory repo + the same contract against real Postgres): phone numbers (Kazakhstan and international, landlines rejected), Kazakhstan time, Russian validation messages, prices, Instagram links, plurals, slugs, passwords, metrics, atomic seat booking under a race, rate limits, admin flag, leaving a club, feedback list.
+- A 26-step browser run against real Postgres, starting empty: creating a club (errors keep what was typed; duplicate email rejected), past-dated events rejected, member join + RSVP, second-device sign-in (generic error for wrong PIN/unknown number), impersonation lockout, cancel-with-confirmation, robots/sitemap/link-preview images, server restart with data and sessions intact, admin rights only with the setup code (and only for listed emails), hiding a club (public gets 404), organizer editing and deleting their club, admin password/PIN resets, deleting one or all clubs. No browser errors.

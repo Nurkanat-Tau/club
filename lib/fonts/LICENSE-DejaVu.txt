@@ -1,0 +1,2 @@
+DejaVu fonts — Bitstream Vera / Arev derived fonts, free to use, copy and redistribute.
+See https://dejavu-fonts.github.io/License.html

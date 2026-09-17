@@ -10,7 +10,7 @@ export default async function ClubSettings({ searchParams }: PageProps<"/org/clu
   const { session, club, q } = await getManagedClub((await searchParams).club);
   return (
     <>
-      <OrgNav clubName={club.name} q={q} isAdmin={session.isAdmin} />
+      <OrgNav clubName={club.name} q={q} isAdmin={session.isAdmin} hidden={club.hidden} />
       <main className="space-y-6 px-4 pb-12 pt-5">
         <h1 className="text-xl font-bold">Информация о клубе</h1>
         <ClubForm key={club.id} club={club} />

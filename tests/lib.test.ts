@@ -8,6 +8,7 @@ import { slugify } from "../lib/slug";
 import { hashPassword, checkPassword } from "../lib/password";
 import { EmailTakenError } from "../lib/types";
 import { createMemoryRepo, resetMemoryStore } from "../lib/data/memory";
+import { newFeaturesContract } from "./repo-contract";
 
 describe("phone", () => {
   it("normalizes common KZ formats", () => {
@@ -47,7 +48,7 @@ describe("validation", () => {
   it("requires consent and a valid phone", () => {
     const r = memberSchema.safeParse({ name: "A", phone: "123", consent: "", pin: "12a" });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.length).toBe(4);
+    if (!r.success) expect(r.error.issues.map((i) => i.path[0]).sort()).toEqual(["consent", "phone", "pin"]);
   });
   it("parses event form", () => {
     const r = eventSchema.safeParse({
@@ -201,5 +202,12 @@ describe("metrics", () => {
     const s = buildSeed();
     s.events = [];
     expect(computeMetrics(s).verdict.level).toBe("early");
+  });
+});
+
+describe("post-audit features (memory)", () => {
+  it("passes the shared contract", async () => {
+    resetMemoryStore();
+    await newFeaturesContract(createMemoryRepo());
   });
 });

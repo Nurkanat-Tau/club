@@ -4,7 +4,11 @@ import { EmailTakenError } from "../types";
 import { slugify } from "../slug";
 
 type PinState = { hash: string | null; failures: number; locked_until: string | null };
-type Store = Snapshot & { organizers: (Organizer & { password_hash: string })[]; pins?: Record<string, PinState> };
+type Store = Snapshot & {
+  organizers: (Organizer & { password_hash: string; created_at?: string })[];
+  pins?: Record<string, PinState>;
+  limits?: Record<string, { start: number; count: number }>;
+};
 const g = globalThis as unknown as { __clubStore?: Store };
 
 export const emptySnapshot = (): Snapshot => ({
@@ -46,7 +50,7 @@ export function createMemoryRepo(): Repo {
       const s = store();
       if (s.organizers.some((o) => o.email === email)) throw new EmailTakenError();
       const club = insertClub(city, c);
-      s.organizers.push({ email, name: c.organizer_name, club_id: club.id, password_hash: passwordHash });
+      s.organizers.push({ email, name: c.organizer_name, club_id: club.id, password_hash: passwordHash, is_admin: false, created_at: nowIso() });
       return club;
     },
     async createClubForOrganizer(city, c, email) {
@@ -237,7 +241,74 @@ export function createMemoryRepo(): Repo {
 
     async getOrganizer(email) {
       const o = store().organizers.find((x) => x.email === email.toLowerCase());
-      return o ? { email: o.email, name: o.name, club_id: o.club_id } : null;
+      return o ? { email: o.email, name: o.name, club_id: o.club_id, is_admin: o.is_admin } : null;
+    },
+    async setPasswordHash(email, hash) {
+      const o = store().organizers.find((x) => x.email === email.toLowerCase());
+      if (o) o.password_hash = hash;
+    },
+    async setAdmin(email, isAdmin) {
+      const o = store().organizers.find((x) => x.email === email.toLowerCase());
+      if (o) o.is_admin = isAdmin;
+    },
+    async listOrganizers() {
+      const s = store();
+      return s.organizers.map((o) => ({
+        email: o.email, name: o.name, club_id: o.club_id, is_admin: o.is_admin, created_at: o.created_at ?? nowIso(),
+        club_name: s.clubs.find((c) => c.id === o.club_id)?.name ?? null,
+      }));
+    },
+    async bookSeat(eventId, memberId) {
+      const s = store();
+      const ev = s.events.find((e) => e.id === eventId);
+      if (!ev) return false;
+      const mine = s.rsvps.find((r) => r.event_id === eventId && r.member_id === memberId);
+      if (ev.capacity !== null && mine?.status !== "going") {
+        const n = s.rsvps.filter((r) => r.event_id === eventId && r.status === "going").length;
+        if (n >= ev.capacity) return false;
+      }
+      if (mine) mine.status = "going";
+      else s.rsvps.push({ event_id: eventId, member_id: memberId, status: "going", attended: null, created_at: nowIso() });
+      return true;
+    },
+    async deleteEvent(id) {
+      const s = store();
+      s.events = s.events.filter((e) => e.id !== id);
+      s.rsvps = s.rsvps.filter((r) => r.event_id !== id);
+      s.feedback = s.feedback.filter((f) => f.event_id !== id);
+    },
+    async leaveClub(clubId, memberId) {
+      const s = store();
+      s.memberships = s.memberships.filter((m) => !(m.club_id === clubId && m.member_id === memberId));
+      const now = nowIso();
+      const future = new Set(s.events.filter((e) => e.club_id === clubId && e.starts_at > now).map((e) => e.id));
+      s.rsvps.forEach((r) => { if (r.member_id === memberId && future.has(r.event_id)) r.status = "cancelled"; });
+    },
+    async markAllAttended(eventId) {
+      store().rsvps.forEach((r) => { if (r.event_id === eventId && r.status === "going" && r.attended === null) r.attended = true; });
+    },
+    async listClubFeedback(clubId) {
+      const s = store();
+      return s.feedback
+        .map((f) => ({ f, e: s.events.find((e) => e.id === f.event_id), m: s.members.find((m) => m.id === f.member_id) }))
+        .filter((x) => x.e?.club_id === clubId)
+        .map(({ f, e, m }) => ({
+          event_id: f.event_id, event_title: e!.title, starts_at: e!.starts_at, rating: f.rating, comment: f.comment,
+          member_name: m?.name ?? "", created_at: f.created_at,
+        }))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    },
+    async findMemberByPhone(phone) {
+      return store().members.find((m) => m.phone === phone) ?? null;
+    },
+    async rateLimited(key, limit, windowSec) {
+      const s = store();
+      const l = (s.limits ??= {});
+      const now = Date.now();
+      const cur = l[key];
+      if (!cur || now - cur.start > windowSec * 1000) l[key] = { start: now, count: 1 };
+      else cur.count++;
+      return l[key].count > limit;
     },
     async getPasswordHash(email) {
       return store().organizers.find((x) => x.email === email.toLowerCase())?.password_hash ?? null;
@@ -246,9 +317,10 @@ export function createMemoryRepo(): Repo {
       store().logs.push({ ...entry, created_at: nowIso() });
     },
     async snapshot() {
-      const { organizers: _o, pins: _p, ...snap } = store();
+      const { organizers: _o, pins: _p, limits: _l, ...snap } = store();
       void _o;
       void _p;
+      void _l;
       return structuredClone(snap);
     },
   };

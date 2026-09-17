@@ -75,6 +75,19 @@ export type Organizer = {
   email: string;
   name: string;
   club_id: string | null;
+  is_admin: boolean;
+};
+
+export type OrganizerRow = Organizer & { created_at: string; club_name: string | null };
+
+export type FeedbackRow = {
+  event_id: string;
+  event_title: string;
+  starts_at: string;
+  rating: number;
+  comment: string | null;
+  member_name: string;
+  created_at: string;
 };
 
 export type NewClubInput = {
@@ -189,6 +202,21 @@ export interface Repo {
 
   getOrganizer(email: string): Promise<Organizer | null>;
   getPasswordHash(email: string): Promise<string | null>;
+  setPasswordHash(email: string, hash: string): Promise<void>;
+  setAdmin(email: string, isAdmin: boolean): Promise<void>;
+  listOrganizers(): Promise<OrganizerRow[]>;
+
+  /** Books a seat only if there is room (atomic). Returns false when the event is full. */
+  bookSeat(eventId: string, memberId: string): Promise<boolean>;
+  deleteEvent(id: string): Promise<void>;
+  /** Leaves a club and cancels the member's upcoming sign-ups in it. */
+  leaveClub(clubId: string, memberId: string): Promise<void>;
+  markAllAttended(eventId: string): Promise<void>;
+  listClubFeedback(clubId: string): Promise<FeedbackRow[]>;
+  findMemberByPhone(phone: string): Promise<Member | null>;
+
+  /** Counts a hit; true when the key exceeded `limit` hits within `windowSec`. */
+  rateLimited(key: string, limit: number, windowSec: number): Promise<boolean>;
   log(entry: Omit<LogEntry, "created_at">): Promise<void>;
   snapshot(): Promise<Snapshot>;
 }

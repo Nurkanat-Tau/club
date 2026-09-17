@@ -88,6 +88,15 @@ create table if not exists organizers (
   created_at timestamptz not null default now()
 );
 
+alter table organizers add column if not exists is_admin boolean not null default false;
+
+-- Database-backed rate limits (work across all servers).
+create table if not exists rate_limits (
+  key text primary key,
+  window_start timestamptz not null,
+  count int not null
+);
+
 create table if not exists logs (
   id bigserial primary key,
   type text not null,

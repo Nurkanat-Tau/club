@@ -1,36 +1,29 @@
 import "server-only";
+import { headers } from "next/headers";
 import { getRepo } from "./data";
 import { checkPassword } from "./password";
 
-// Small in-memory brute-force guard (per server instance).
-const attempts = new Map<string, { count: number; until: number }>();
+/** Best-effort client IP (Vercel sets x-forwarded-for). */
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  return (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "unknown";
+}
 
-export function tooManyAttempts(key: string) {
-  const a = attempts.get(key);
-  return !!a && a.count >= 5 && Date.now() < a.until;
-}
-function recordFailure(key: string) {
-  const a = attempts.get(key);
-  if (!a || Date.now() > a.until) attempts.set(key, { count: 1, until: Date.now() + 15 * 60 * 1000 });
-  else a.count++;
-}
+/** Database-backed limits, shared by all servers. */
+export const limits = {
+  /** Organizer password attempts per email. */
+  login: (email: string) => getRepo().rateLimited(`login:${email.toLowerCase()}`, 8, 15 * 60),
+  /** Any sign-in / sign-up attempts per IP (slows down phone-number guessing). */
+  memberAuth: async () => getRepo().rateLimited(`member-auth:${await clientIp()}`, 30, 15 * 60),
+  /** New member profiles per IP. */
+  newMember: async () => getRepo().rateLimited(`new-member:${await clientIp()}`, 15, 60 * 60),
+  /** New clubs per IP. */
+  newClub: async () => getRepo().rateLimited(`new-club:${await clientIp()}`, 5, 60 * 60),
+  /** Admin setup code attempts per IP. */
+  adminClaim: async () => getRepo().rateLimited(`admin-claim:${await clientIp()}`, 5, 60 * 60),
+};
 
 /** True if the email/password pair matches an organizer account. */
 export async function verifyPassword(email: string, password: string): Promise<boolean> {
-  const key = email.toLowerCase();
-  const ok = await checkPassword(password, await getRepo().getPasswordHash(key));
-  if (ok) attempts.delete(key);
-  else recordFailure(key);
-  return ok;
-}
-
-// Club creation guard: at most 5 new clubs per visitor/IP per hour (per server instance).
-const creations = new Map<string, number[]>();
-export function tooManyClubs(key: string) {
-  const now = Date.now();
-  const list = (creations.get(key) ?? []).filter((t) => now - t < 3600_000);
-  creations.set(key, list);
-  if (list.length >= 5) return true;
-  list.push(now);
-  return false;
+  return checkPassword(password, await getRepo().getPasswordHash(email.toLowerCase()));
 }

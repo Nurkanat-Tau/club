@@ -7,6 +7,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import { Client } from "pg";
 import { createPostgresRepo } from "../lib/data/postgres";
 import { EmailTakenError } from "../lib/types";
+import { newFeaturesContract } from "./repo-contract";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -14,7 +15,7 @@ describe.skipIf(!url)("postgres repo", () => {
   beforeAll(async () => {
     const c = new Client({ connectionString: url });
     await c.connect();
-    await c.query("drop table if exists logs, organizers, feedback, rsvps, memberships, members, events, clubs cascade");
+    await c.query("drop table if exists rate_limits, logs, organizers, feedback, rsvps, memberships, members, events, clubs cascade");
     await c.end();
   });
 
@@ -91,5 +92,9 @@ describe.skipIf(!url)("postgres repo", () => {
     const snap = await repo.snapshot();
     expect(snap.feedback).toEqual([]); // deleted with the club
     expect(snap.logs.length).toBe(1);
+  });
+
+  it("post-audit features", async () => {
+    await newFeaturesContract(createPostgresRepo(url!));
   });
 });

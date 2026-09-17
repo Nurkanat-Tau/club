@@ -66,3 +66,8 @@ export function toIcsDate(iso: string) {
 export function isPast(iso: string, graceMin = 0) {
   return new Date(iso).getTime() < Date.now() - graceMin * 60000;
 }
+
+/** ISO timestamp `minutes` from now (negative = in the past). Kept out of components for render purity. */
+export function isoFromNow(minutes: number) {
+  return new Date(Date.now() + minutes * 60000).toISOString();
+}

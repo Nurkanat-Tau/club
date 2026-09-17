@@ -298,7 +298,75 @@ export function createPostgresRepo(connectionString: string): Repo {
     },
 
     async getOrganizer(email) {
-      return one("select email, name, club_id from organizers where email = $1", [email.toLowerCase()]);
+      return one("select email, name, club_id, is_admin from organizers where email = $1", [email.toLowerCase()]);
+    },
+    async setPasswordHash(email, hash) {
+      await q("update organizers set password_hash = $2 where email = $1", [email.toLowerCase(), hash]);
+    },
+    async setAdmin(email, isAdmin) {
+      await q("update organizers set is_admin = $2 where email = $1", [email.toLowerCase(), isAdmin]);
+    },
+    async listOrganizers() {
+      return q(
+        `select o.email, o.name, o.club_id, o.is_admin, o.created_at, c.name as club_name
+         from organizers o left join clubs c on c.id = o.club_id order by o.created_at desc`,
+      );
+    },
+    async bookSeat(eventId, memberId) {
+      return tx(async (db) => {
+        const ev = (await db.query("select capacity from events where id = $1 for update", [eventId])).rows[0];
+        if (!ev) return false;
+        if (ev.capacity !== null) {
+          const mine = await db.query("select status from rsvps where event_id = $1 and member_id = $2", [eventId, memberId]);
+          if (mine.rows[0]?.status !== "going") {
+            const n = (await db.query("select count(*) as n from rsvps where event_id = $1 and status = 'going'", [eventId])).rows[0].n;
+            if (n >= ev.capacity) return false;
+          }
+        }
+        await db.query(
+          `insert into rsvps (event_id, member_id, status) values ($1,$2,'going')
+           on conflict (event_id, member_id) do update set status = 'going'`,
+          [eventId, memberId],
+        );
+        return true;
+      });
+    },
+    async deleteEvent(id) {
+      if (isUuid(id)) await q("delete from events where id = $1", [id]);
+    },
+    async leaveClub(clubId, memberId) {
+      await q("delete from memberships where club_id = $1 and member_id = $2", [clubId, memberId]);
+      await q(
+        `update rsvps set status = 'cancelled' where member_id = $2 and status = 'going'
+           and event_id in (select id from events where club_id = $1 and starts_at > now())`,
+        [clubId, memberId],
+      );
+    },
+    async markAllAttended(eventId) {
+      await q("update rsvps set attended = true where event_id = $1 and status = 'going' and attended is null", [eventId]);
+    },
+    async listClubFeedback(clubId) {
+      return q(
+        `select f.event_id, e.title as event_title, e.starts_at, f.rating, f.comment, m.name as member_name, f.created_at
+         from feedback f join events e on e.id = f.event_id join members m on m.id = f.member_id
+         where e.club_id = $1 order by f.created_at desc limit 200`,
+        [clubId],
+      );
+    },
+    async findMemberByPhone(phone) {
+      return one<Member>(`select ${MEMBER_COLS} from members where phone = $1`, [phone]);
+    },
+    async rateLimited(key, limit, windowSec) {
+      const r = await one<{ count: number }>(
+        `insert into rate_limits (key, window_start, count) values ($1, now(), 1)
+         on conflict (key) do update set
+           count = case when rate_limits.window_start < now() - make_interval(secs => $2::int) then 1 else rate_limits.count + 1 end,
+           window_start = case when rate_limits.window_start < now() - make_interval(secs => $2::int) then now() else rate_limits.window_start end
+         returning count`,
+        [key, windowSec],
+      );
+      if (Math.random() < 0.02) q("delete from rate_limits where window_start < now() - interval '1 day'").catch(() => {});
+      return (r?.count ?? 0) > limit;
     },
     async getPasswordHash(email) {
       return (await one<{ password_hash: string }>("select password_hash from organizers where email = $1", [email.toLowerCase()]))

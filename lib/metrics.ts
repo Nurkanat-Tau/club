@@ -41,7 +41,19 @@ export type Metrics = {
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
-export function computeMetrics(s: Snapshot, now = new Date()): Metrics {
+export function computeMetrics(input: Snapshot, now = new Date()): Metrics {
+  // Hidden clubs (spam, tests) are excluded from every number.
+  const hidden = new Set(input.clubs.filter((c) => c.hidden).map((c) => c.id));
+  const hiddenEvents = new Set(input.events.filter((e) => hidden.has(e.club_id)).map((e) => e.id));
+  const s: Snapshot = {
+    ...input,
+    clubs: input.clubs.filter((c) => !c.hidden),
+    events: input.events.filter((e) => !hidden.has(e.club_id)),
+    memberships: input.memberships.filter((m) => !hidden.has(m.club_id)),
+    rsvps: input.rsvps.filter((r) => !hiddenEvents.has(r.event_id)),
+    feedback: input.feedback.filter((f) => !hiddenEvents.has(f.event_id)),
+    logs: input.logs.filter((l) => !l.club_id || !hidden.has(l.club_id)),
+  };
   const nowIso = now.toISOString();
   const d7 = new Date(now.getTime() - 7 * 86400000).toISOString();
   const d14 = new Date(now.getTime() - 14 * 86400000).toISOString();

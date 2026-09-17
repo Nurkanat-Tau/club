@@ -8,7 +8,7 @@ export const metadata = { title: "Вход для организаторов", r
 
 export default async function LoginPage() {
   const s = await getOrgSession();
-  if (s) redirect(s.isAdmin ? "/admin" : "/org");
+  if (s) redirect(s.isAdmin ? "/admin" : s.club_id ? "/org" : "/new-club");
   return (
     <main className="space-y-6 px-4 pt-12">
       <div>
@@ -18,6 +18,9 @@ export default async function LoginPage() {
         </p>
       </div>
       <LoginForm />
+      <p className="text-sm text-muted">
+        Забыли пароль? Напишите администратору Club — он выдаст временный пароль, который потом можно сменить в разделе «Аккаунт».
+      </p>
     </main>
   );
 }

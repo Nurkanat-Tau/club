@@ -68,12 +68,13 @@ export async function getVisitorId(): Promise<string | null> {
 
 export type OrgSession = Organizer & { isAdmin: boolean };
 
-export function isAdminEmail(email: string) {
+/** Emails allowed to claim admin rights (with the setup code). Empty list = any organizer may claim. */
+export function mayClaimAdmin(email: string) {
   const list = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  return list.includes(email.toLowerCase());
+  return list.length === 0 || list.includes(email.toLowerCase());
 }
 
 export async function getOrgSession(): Promise<OrgSession | null> {
@@ -85,7 +86,7 @@ export async function getOrgSession(): Promise<OrgSession | null> {
     // Re-read from the database so removing an organizer takes effect immediately.
     const org = await getRepo().getOrganizer(email);
     if (!org) return null;
-    return { ...org, isAdmin: isAdminEmail(org.email) };
+    return { ...org, isAdmin: org.is_admin };
   } catch {
     return null;
   }

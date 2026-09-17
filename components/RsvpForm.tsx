@@ -9,7 +9,12 @@ export function RsvpForm({ eventId, known, full }: { eventId: string; known: boo
   const [open, setOpen] = useState(false);
 
   if (state?.ok) return <p className="card p-4 font-semibold">🎉 {state.message} Организатор напомнит о встрече.</p>;
-  if (full) return <p className="card p-4 text-center font-medium text-muted">Мест больше нет</p>;
+  if (full)
+    return (
+      <p className="card p-4 text-center font-medium text-muted">
+        Мест больше нет. Следите за чатом клуба — места иногда освобождаются.
+      </p>
+    );
 
   if (!known && !open) {
     return (
@@ -23,13 +28,13 @@ export function RsvpForm({ eventId, known, full }: { eventId: string; known: boo
     <form action={action} className="card space-y-4 p-4">
       <input type="hidden" name="event_id" value={eventId} />
       {!known && <MemberFields errors={state?.errors} values={state?.values} />}
-      {!known && (
-        <p className="text-sm">
-          Уже есть профиль? <a href={`/me?next=/e/${eventId}`} className="underline">Войти по номеру и PIN</a>
-        </p>
-      )}
       {state?.message && !state.ok && <p className="err">{state.message}</p>}
       <SubmitButton>Я приду</SubmitButton>
+      {!known && (
+        <p className="text-center text-sm">
+          <a href={`/me?next=/e/${eventId}`} className="underline">Войти по номеру и PIN</a>
+        </p>
+      )}
     </form>
   );
 }

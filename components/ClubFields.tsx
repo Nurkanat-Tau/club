@@ -1,4 +1,10 @@
 import { CATEGORIES } from "@/lib/categories";
+import { LIMITS } from "@/lib/validation";
+
+const MAX: Record<string, number> = {
+  name: LIMITS.clubName, description: LIMITS.clubDescription, schedule_text: LIMITS.schedule, meeting_point: LIMITS.place,
+  chat_link: 500, instagram: 200, organizer_name: LIMITS.organizerName, organizer_bio: LIMITS.organizerBio,
+};
 
 /** Club fields shared by "create club" and "edit club". `formKey` remounts the <select> after a failed submit. */
 export function ClubFields({ values, errors, formKey = 0 }: {
@@ -10,9 +16,9 @@ export function ClubFields({ values, errors, formKey = 0 }: {
     <div>
       <label className="label" htmlFor={name}>{label}</label>
       {opts.area ? (
-        <textarea id={name} name={name} rows={4} className="input" defaultValue={values[name] ?? ""} placeholder={opts.placeholder} required={opts.required} />
+        <textarea id={name} name={name} rows={4} maxLength={MAX[name]} className="input" defaultValue={values[name] ?? ""} placeholder={opts.placeholder} required={opts.required} />
       ) : (
-        <input id={name} name={name} type={opts.type ?? "text"} className="input" defaultValue={values[name] ?? ""} placeholder={opts.placeholder} required={opts.required} autoComplete={opts.auto} />
+        <input id={name} name={name} type={opts.type ?? "text"} maxLength={MAX[name]} className="input" defaultValue={values[name] ?? ""} placeholder={opts.placeholder} required={opts.required} autoComplete={opts.auto} />
       )}
       {opts.hint && <p className="mt-1 text-xs text-muted">{opts.hint}</p>}
       {errors[name] && <p className="err">{errors[name]}</p>}

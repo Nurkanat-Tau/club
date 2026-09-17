@@ -97,7 +97,7 @@ logs (type, visitor_id, member_id, club_id, event_id, created_at)
 - **Members:** phone + a 4–6 digit PIN chosen at first join (scrypt-hashed). A signed, httpOnly cookie remembers the device for a year. On another device they sign in on `/me` with phone + PIN. 5 wrong PINs lock that number for 15 minutes (stored in the database, so it works across servers).
   - *Next step if clubs become paid:* WhatsApp/SMS one-time codes instead of a PIN.
 - **Organizers & admin:** sign up themselves on `/new-club` (email + password, scrypt-hashed in our own table). After login we set our own signed cookie (30 days); every request re-checks the `organizers` table, so removing a row revokes access immediately.
-- **Admins:** anyone whose email is in `ADMIN_EMAILS` (they sign up by creating a club).
+- **Admins:** an organizer account whose email is in `ADMIN_EMAILS` **and** who entered the secret `ADMIN_SETUP_CODE` once at `/admin/claim` (stored as `organizers.is_admin`). This stops a stranger from registering the admin email first.
 
 ## Technology stack
 
@@ -149,10 +149,12 @@ Anything else (e.g. "how did you hear about us?") → ask in person and write it
 - Signed httpOnly `SameSite=Lax` cookies, `Secure` in production; `SESSION_SECRET` required in production.
 - Database access is server-only (`server-only` import guard); organizer passwords are scrypt-hashed; club creation is rate-limited and has a honeypot; admins can hide clubs.
 - Server-side validation (zod): phone format, lengths, URLs must be `http(s)` (blocks `javascript:` links).
-- Login brute-force guard (5 attempts / 15 min per email, per server instance).
+- Rate limits stored in the database (work across servers): organizer login 8 / 15 min per email, member sign-in 30 / 15 min per IP, new profiles 15 / hour, new clubs 5 / hour, admin claim 5 / hour. Member PIN: 5 wrong tries lock the number for 15 minutes.
+- Seat booking is atomic (`select … for update`), so two people can't take the last place.
+- Sign-in errors don't reveal whether a phone number is registered.
 - Honeypot field against simple bots.
 - Phone numbers visible only to that club's organizer; other members see first names only.
 - Consent checkbox + privacy page (Law of RK on personal data — **have the text reviewed before a wide launch**).
 - Production refuses to run in demo mode unless `ALLOW_DEMO=1`, so real people never type phones into a demo.
 
-Not yet (add before scaling): rate limiting at the edge (Vercel Firewall / Upstash), phone OTP, data-deletion self-service, audit log for organizer actions, backups policy (check the free tier's backup window).
+Not yet (add before scaling): phone OTP (SMS/WhatsApp codes, paid), audit log for organizer actions, backups policy (check the free tier's backup window), legal review of the personal-data text and where data is stored (the RK law expects Kazakh citizens' data to be kept in Kazakhstan).
